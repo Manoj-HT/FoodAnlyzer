@@ -1,0 +1,105 @@
+{
+    "8f28d2aa-d968-42d9-8a35-0ff3a3cf9800": {
+        "id": "8f28d2aa-d968-42d9-8a35-0ff3a3cf9800",
+        "name": "manu",
+        "email": "manu@example.com",
+        "password": "123456",
+        "confirmed": true,
+        "token": "tok_4f2577f139764663",
+        "report_cache": {
+            "average_calories_per_meal": 271.9,
+            "total_meals_logged": 97,
+            "monthly_average_calories": 942.0,
+            "monthly_average_nutrition": {
+                "average_protein": 45.1,
+                "average_carbs": 111.8,
+                "average_fat": 32.8,
+                "average_grade": "A"
+            },
+            "distinct_foods": [
+                "dal rice",
+                "paneer butter masala",
+                "roti sabzi",
+                "avocado toast",
+                "fruit salad",
+                "protein shake",
+                "greek yogurt",
+                "fried rice",
+                "chicken biryani",
+                "idli sambar",
+                "pasta",
+                "oatmeal",
+                "veg biryani",
+                "sandwich",
+                "burger",
+                "sushi",
+                "grilled chicken",
+                "masala dosa",
+                "pizza"
+            ],
+            "food_frequencies": {
+                "avocado toast": 7,
+                "protein shake": 6,
+                "idli sambar": 4,
+                "dal rice": 9,
+                "fruit salad": 7,
+                "roti sabzi": 8,
+                "paneer butter masala": 9,
+                "pasta": 4,
+                "sushi": 3,
+                "oatmeal": 4,
+                "veg biryani": 4,
+                "grilled chicken": 3,
+                "sandwich": 4,
+                "burger": 4,
+                "pizza": 2,
+                "greek yogurt": 6,
+                "masala dosa": 3,
+                "fried rice": 5,
+                "chicken biryani": 5
+            },
+            "time_of_consumption": {
+                "morning": {
+                    "count": 40,
+                    "avg_time": "08:57 AM"
+                },
+                "afternoon": {
+                    "count": 34,
+                    "avg_time": "02:23 PM"
+                },
+                "evening": {
+                    "count": 0,
+                    "avg_time": "N/A"
+                },
+                "night": {
+                    "count": 23,
+                    "avg_time": "03:05 AM"
+                }
+            },
+            "confidence_score": 100.0
+        },
+        "insights": [
+            "Manu, your overall calorie intake (942 kcal/day) is higher than needed for a consistent calorie deficit aimed at weight management. Let\u2019s aim for a daily intake reduction of around 100-200 kcal. We\u2019ll achieve this by carefully reviewing meal sizes and food choices.",
+            "While your 'Grade' is 'A', the frequent consumption of items like paneer butter masala (9x), fried rice (5x), and pizza (2x) contains higher calorie and potentially higher carbohydrate levels.  Let's explore swapping some of these for lower-calorie, nutrient-dense options like dal rice or roti sabzi.",
+            "The significant number of meals logged during the night (23 meals at 3:05 AM) is concerning.  This pattern could be indicative of irregular eating habits and potentially affecting blood sugar control.  Let\u2019s work on establishing a more consistent meal schedule, ideally with at least 3-4 hours between meals, especially before bedtime. Could you track exactly what you are eating at this time?",
+            "Given your lactose sensitivity, the high consumption of Greek yogurt (6x) may be causing discomfort. While yogurt can be a good protein source, let's explore dairy-free alternatives like plant-based yogurts or increasing your protein intake from other sources such as protein shakes or lentils.",
+            "Consider increasing your protein intake slightly. Currently, you\u2019re consuming an average of 45.1g of protein per day.  For a 5-year-old, aiming for closer to 60-70g would be beneficial for supporting muscle development and satiety.  Adding a protein shake or incorporating more paneer (if tolerated) could help.",
+            "To improve the confidence score of this report, please diligently log *all* meals, including snacks and smaller portions.  Accuracy in logging is crucial for providing the most precise and actionable nutritional recommendations.  Focus particularly on logging your nighttime meals."
+        ],
+        "last_insight_generated_time": "2026-06-13T09:26:09.554692",
+        "insight_version": 4,
+        "structured_details": {
+            "current_details": {
+                "age": 5,
+                "height": "5'0\"",
+                "weight": "83 kg"
+            },
+            "health_history_and_ailments": [
+                "Lactose sensitivity / Dairy-free preferences"
+            ],
+            "goals": [
+                "Calorie deficit and weight management"
+            ]
+        }
+    }
+}

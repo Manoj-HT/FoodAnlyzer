@@ -1,0 +1,170 @@
+<div class="logs-page-container">
+  <!-- Shared Navigation Component -->
+  <app-navigation></app-navigation>
+
+  <main class="logs-content">
+    <div class="logs-header-section">
+      <div class="header-text">
+        <h2>📋 Weekly Food Diary</h2>
+        <p class="subtitle">Your logged meals grouped by time period.</p>
+      </div>
+
+      <!-- Week Navigation Controls -->
+      <div class="week-navigation">
+        <button class="nav-btn" (click)="prevWeek()" title="Previous Week">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m15 18-6-6 6-6"/>
+          </svg>
+        </button>
+        <span class="week-range">{{ weekRangeLabel() }}</span>
+        <button class="nav-btn" (click)="nextWeek()" [disabled]="weekOffset() === 0" title="Next Week">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    @if (isLoading()) {
+      <div class="loader-container">
+        <div class="spinner"></div>
+        <p>Retrieving your logs...</p>
+      </div>
+    } @else if (errorMsg()) {
+      <div class="alert alert-error">
+        <span>⚠️ {{ errorMsg() }}</span>
+      </div>
+    } @else {
+      <!-- Weekly Grid View -->
+      <div class="weekly-grid-container">
+        <div class="weekly-columns-wrapper">
+          @for (column of dayColumns(); track column.dateString) {
+            <div class="day-column">
+              <header class="column-header">
+                <h3>{{ column.dayName }}</h3>
+                <span class="column-date">{{ column.dateLabel }}</span>
+              </header>
+
+              <div class="column-sections">
+                <!-- Morning Section -->
+                <section class="day-section morning-section">
+                  <div class="section-title">🌅 Morning <span class="time-range">(5 AM - 12 PM)</span></div>
+                  <div class="section-meals">
+                    @for (meal of column.sections.morning; track meal.id) {
+                      <button class="meal-clickable-item" (click)="openDetailModal(meal)">
+                        <span class="meal-name">{{ meal.description }}</span>
+                        <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                      </button>
+                    } @empty {
+                      <span class="no-meals">No meals logged</span>
+                    }
+                  </div>
+                </section>
+
+                <!-- Noon Section -->
+                <section class="day-section noon-section">
+                  <div class="section-title">☀️ Noon <span class="time-range">(12 PM - 5 PM)</span></div>
+                  <div class="section-meals">
+                    @for (meal of column.sections.noon; track meal.id) {
+                      <button class="meal-clickable-item" (click)="openDetailModal(meal)">
+                        <span class="meal-name">{{ meal.description }}</span>
+                        <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                      </button>
+                    } @empty {
+                      <span class="no-meals">No meals logged</span>
+                    }
+                  </div>
+                </section>
+
+                <!-- Evening Section -->
+                <section class="day-section evening-section">
+                  <div class="section-title">🌇 Evening <span class="time-range">(5 PM - 9 PM)</span></div>
+                  <div class="section-meals">
+                    @for (meal of column.sections.evening; track meal.id) {
+                      <button class="meal-clickable-item" (click)="openDetailModal(meal)">
+                        <span class="meal-name">{{ meal.description }}</span>
+                        <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                      </button>
+                    } @empty {
+                      <span class="no-meals">No meals logged</span>
+                    }
+                  </div>
+                </section>
+
+                <!-- Late Night Section -->
+                <section class="day-section late-night-section">
+                  <div class="section-title">🌙 Late Night <span class="time-range">(9 PM - 5 AM)</span></div>
+                  <div class="section-meals">
+                    @for (meal of column.sections.lateNight; track meal.id) {
+                      <button class="meal-clickable-item" (click)="openDetailModal(meal)">
+                        <span class="meal-name">{{ meal.description }}</span>
+                        <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                      </button>
+                    } @empty {
+                      <span class="no-meals">No meals logged</span>
+                    }
+                  </div>
+                </section>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </main>
+
+  <!-- Log Details Modal -->
+  <app-modal 
+    [(isOpen)]="isDetailModalOpen" 
+    [title]="'Meal Details'"
+  >
+    @if (selectedLog()) {
+      <div body class="meal-detail-modal-body">
+        <div class="detail-row">
+          <label>Logged At</label>
+          <p class="detail-val">{{ formatFullDate(selectedLog()!.time) }}</p>
+        </div>
+
+        <div class="detail-row">
+          <label>Meal Description</label>
+          <p class="detail-val description-text">{{ selectedLog()!.description }}</p>
+        </div>
+
+        <div class="detail-row breakdown-row">
+          <label>Nutritional Breakdown</label>
+          <div class="detail-macros-grid">
+            <div class="detail-macro calories">
+              <span class="macro-value">{{ selectedLog()!.report.calories }}</span>
+              <span class="macro-label">Calories (kcal)</span>
+            </div>
+            <div class="detail-macro protein">
+              <span class="macro-value">{{ selectedLog()!.report.protein }}g</span>
+              <span class="macro-label">Protein</span>
+            </div>
+            <div class="detail-macro carbs">
+              <span class="macro-value">{{ selectedLog()!.report.carbs }}g</span>
+              <span class="macro-label">Carbs</span>
+            </div>
+            <div class="detail-macro fat">
+              <span class="macro-value">{{ selectedLog()!.report.fat }}g</span>
+              <span class="macro-label">Fat</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="detail-row grade-row">
+          <label>Nutrition Grade</label>
+          <div class="detail-grade-container">
+            <div class="detail-grade-badge" [attr.data-grade]="selectedLog()!.report.grade">
+              Grade {{ selectedLog()!.report.grade }}
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+    
+    <div footer class="meal-detail-modal-footer">
+      <button type="button" class="btn btn-confirm" (click)="isDetailModalOpen.set(false)">Close</button>
+    </div>
+  </app-modal>
+</div>

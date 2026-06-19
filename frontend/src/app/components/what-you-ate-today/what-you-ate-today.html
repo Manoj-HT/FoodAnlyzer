@@ -1,0 +1,403 @@
+<div class="dashboard-container">
+  <!-- Navigation Header -->
+  <app-navigation></app-navigation>
+
+  <!-- Main Content Grid -->
+  <main class="dashboard-grid">
+    <!-- Left: Food Analyzer Widget -->
+    <section class="widget-section">
+      <div class="glass-card main-widget">
+        <div class="widget-header">
+          <span class="widget-icon">⚡</span>
+          <div>
+            <h2>What you ate today?</h2>
+            <p>Tell us about your meal or daily intake for high-fidelity nutritional breakdown.</p>
+          </div>
+        </div>
+
+        <div class="widget-body">
+          <div class="input-area">
+            <!-- Media Preview Grid -->
+            @if (previewItems().length > 0) {
+            <div class="media-preview-grid animate-fade-in">
+              @for (item of previewItems(); track item.id) {
+              <div class="preview-card" [class.analyzing]="item.isAnalyzing">
+                <button type="button" class="btn-remove-preview" (click)="removePreviewItem(item.id)"
+                  title="Remove item">✕</button>
+
+                @if (item.type === 'image') {
+                <div class="image-preview-wrapper">
+                  <img [src]="item.blobUrl" alt="Food preview" />
+                  <button type="button" class="btn-analyze-preview" (click)="analyzeImageItem(item)"
+                    [disabled]="item.isAnalyzing || isAnalyzing()" title="Analyze Image"
+                    [class.analyzed]="item.isAnalyzed">
+                    @if (item.isAnalyzing) {
+                    <span class="small-spinner"></span>
+                    } @else if (item.isAnalyzed) {
+                    ✓ Scanned
+                    } @else {
+                    🔍 Scan
+                    }
+                  </button>
+                </div>
+                } @else if (item.type === 'audio') {
+                <div class="audio-preview-wrapper">
+                  <div class="audio-icon-wrapper">
+                    <span class="audio-icon">🎙️</span>
+                  </div>
+                  <audio [src]="item.blobUrl" controls></audio>
+                  <span class="audio-title">{{ item.name }}</span>
+                  <button type="button" class="btn-analyze-preview" (click)="transcribeAudioItem(item)"
+                    [disabled]="item.isAnalyzing || isAnalyzing()" title="Transcribe Audio"
+                    [class.analyzed]="item.isAnalyzed">
+                    @if (item.isAnalyzing) {
+                    <span class="small-spinner"></span>
+                    } @else if (item.isAnalyzed) {
+                    ✓ Transcribed
+                    } @else {
+                    🔍 Scan
+                    }
+                  </button>
+                </div>
+                }
+              </div>
+              }
+            </div>
+            }
+
+            <div class="textarea-container">
+              <textarea [(ngModel)]="foodInput"
+                placeholder="What you ate today? (e.g. 'I had a grilled chicken breast, brown rice and a fresh mixed green salad for lunch')"
+                rows="3"></textarea>
+
+              <div class="image-picker-bar">
+                <button type="button" class="btn-image-picker" (click)="openImageOptionModal()"
+                  [disabled]="isImageAnalyzing() || isAnalyzing()">
+                  📷 <span>{{ selectedImageName() ? selectedImageName() : 'Upload Food Image' }}</span>
+                </button>
+                <input #fileInput type="file" (change)="onImageSelected($event)" accept="image/*"
+                  style="display: none;" />
+
+                <button type="button" class="btn-voice-picker" (click)="openVoiceOptionModal()"
+                  [disabled]="isImageAnalyzing() || isAnalyzing() || isAudioTranscribing()">
+                  🎙️ <span>Say with Voice</span>
+                </button>
+                <input #voiceFileInput type="file" (change)="onVoiceSelected($event)" accept="audio/*"
+                  style="display: none;" />
+
+                @if (isImageAnalyzing()) {
+                <span class="image-loader">
+                  <span class="small-spinner"></span> Running transformer classification...
+                </span>
+                }
+              </div>
+            </div>
+
+            <!-- Confirmation Banner -->
+            @if (showConfirmationDialog()) {
+            <div class="confirmation-banner animate-fade-in">
+              @if (nonFoodWarning()) {
+              <div class="alert-warning-banner">
+                ⚠️ <strong>Non-Food Detected:</strong> We detected a <strong>{{ detectedFood() }}</strong> (Confidence:
+                {{ (detectionConfidence() * 100).toFixed(0) }}%). This doesn't look like food. Would you like to use
+                this detection anyway?
+              </div>
+              } @else {
+              <div class="alert-success-banner">
+                🥗 <strong>Food Detected!</strong> Is this a <strong>{{ detectedFood() }}</strong>? (Confidence: {{
+                (detectionConfidence() * 100).toFixed(0) }}%)
+              </div>
+              }
+
+              <div class="banner-actions">
+                <button type="button" class="btn btn-confirm-yes" (click)="confirmDetection()">Add this meal</button>
+                <button type="button" class="btn btn-confirm-no" (click)="dismissDetection()">No, Cancel</button>
+              </div>
+            </div>
+            }
+
+            <button class="btn btn-primary"
+              [disabled]="isAnalyzing() || isImageAnalyzing() || isAudioTranscribing() || (!foodInput().trim() && !hasUnanalyzedImages() && !hasUnanalyzedAudio())"
+              (click)="onAnalyzeFood()">
+              @if (isAnalyzing() || isAudioTranscribing()) {
+              <span class="small-spinner"></span> Analyzing...
+              } @else {
+              Analyze Meal <span class="arrow">→</span>
+              }
+            </button>
+          </div>
+
+          <!-- Result Area -->
+          @if (showResult() && mealBreakdown()) {
+          <div class="analysis-results animate-fade-in">
+            <div class="results-header">
+              <h3>Nutritional Report</h3>
+              <span
+                class="health-grade grade-{{ mealBreakdown()?.grade?.toLowerCase()?.replace('+', '')?.replace('-', '') }}">
+                Grade: {{ mealBreakdown()?.grade }}
+              </span>
+            </div>
+
+            <!-- Metrics Cards -->
+            <div class="metrics-grid">
+              <div class="metric-card calories">
+                <span class="metric-val">{{ mealBreakdown()?.calories }}</span>
+                <span class="metric-label">CALORIES</span>
+              </div>
+              <div class="metric-card protein">
+                <span class="metric-val">{{ mealBreakdown()?.protein }}g</span>
+                <span class="metric-label">PROTEIN</span>
+              </div>
+              <div class="metric-card carbs">
+                <span class="metric-val">{{ mealBreakdown()?.carbs }}g</span>
+                <span class="metric-label">CARBS</span>
+              </div>
+              <div class="metric-card fat">
+                <span class="metric-val">{{ mealBreakdown()?.fat }}g</span>
+                <span class="metric-label">FATS</span>
+              </div>
+            </div>
+
+            <!-- Macro Charts -->
+            <div class="macro-chart-container">
+              <label>Macronutrient Ratio</label>
+              <div class="macro-progress-bar">
+                <div class="progress-segment protein"
+                  [style.width.%]="(mealBreakdown()!.protein * 4 / (mealBreakdown()!.protein * 4 + mealBreakdown()!.carbs * 4 + mealBreakdown()!.fat * 9)) * 100">
+                </div>
+                <div class="progress-segment carbs"
+                  [style.width.%]="(mealBreakdown()!.carbs * 4 / (mealBreakdown()!.protein * 4 + mealBreakdown()!.carbs * 4 + mealBreakdown()!.fat * 9)) * 100">
+                </div>
+                <div class="progress-segment fat"
+                  [style.width.%]="(mealBreakdown()!.fat * 9 / (mealBreakdown()!.protein * 4 + mealBreakdown()!.carbs * 4 + mealBreakdown()!.fat * 9)) * 100">
+                </div>
+              </div>
+              <div class="macro-legend">
+                <span class="legend-item protein">Protein</span>
+                <span class="legend-item carbs">Carbs</span>
+                <span class="legend-item fat">Fat</span>
+              </div>
+            </div>
+
+            <!-- Health Tips -->
+            <div class="tips-section">
+              <h4>Health Insights & Suggestions</h4>
+              <ul>
+                @for (tip of mealBreakdown()?.tips; track tip) {
+                <li>
+                  <span class="tip-bullet">🌱</span>
+                  <span>{{ tip }}</span>
+                </li>
+                }
+              </ul>
+            </div>
+
+            <!-- Log Meal Action -->
+            <div class="results-actions">
+              <button type="button" class="btn btn-secondary btn-log-meal" (click)="openLogModal()">
+                📋 Log this meal
+              </button>
+            </div>
+          </div>
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: User Profile Sidebar -->
+    <aside class="sidebar-section">
+      <div class="glass-card profile-card">
+        <div class="profile-avatar">
+          <span class="avatar-emoji">🥗</span>
+        </div>
+        <h2 class="profile-name">{{ userName() }}</h2>
+        <span class="profile-email">{{ userEmail() }}</span>
+
+        <hr class="divider" />
+
+        <div class="profile-bio-section">
+          <h3>Your Wellness Goals</h3>
+          <p class="profile-bio">{{ userBio() || 'No description provided.' }}</p>
+        </div>
+
+        <div class="profile-footer-actions">
+          <div class="status-badge">
+            <span class="status-icon">🛡️</span> Verified Member
+          </div>
+          <button type="button" class="btn btn-add-details" (click)="openDetailsModal()">
+            ➕ Add More Details
+          </button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Log Meal Modal -->
+  <app-modal [title]="'Log this meal?'" [(isOpen)]="isLogModalOpen">
+    <div body class="log-meal-modal-body">
+      <!-- Section 1: Grid of uploaded files (read-only) -->
+      @if (previewItems().length > 0) {
+      <div class="log-section">
+        <label class="section-label">Uploaded Files Summary</label>
+        <div class="log-media-grid">
+          @for (item of previewItems(); track item.id) {
+          <div class="log-media-card">
+            @if (item.type === 'image') {
+            <img [src]="item.blobUrl" alt="Scanned food" class="log-media-thumb" />
+            } @else if (item.type === 'audio') {
+            <div class="log-audio-placeholder">
+              🎙️ <span class="log-audio-text">{{ item.name }}</span>
+            </div>
+            }
+          </div>
+          }
+        </div>
+      </div>
+      }
+
+      <!-- Section 2: Description from the text box -->
+      <div class="log-section">
+        <label class="section-label">Meal Description</label>
+        <div class="log-meal-description">
+          {{ foodInput() || '(No description text)' }}
+        </div>
+      </div>
+
+      <!-- Section 3: Date time picker with current date and time -->
+      <div class="log-section">
+        <label class="section-label" for="log-time-picker">Date & Time</label>
+        <input id="log-time-picker" type="datetime-local" class="form-control log-time-input"
+          [(ngModel)]="logDateTime" />
+      </div>
+    </div>
+
+    <div footer class="log-meal-modal-footer">
+      <button type="button" class="btn btn-cancel" (click)="isLogModalOpen.set(false)">Cancel</button>
+      <button type="button" class="btn btn-confirm" (click)="confirmLogMeal()">Confirm</button>
+    </div>
+  </app-modal>
+
+  <!-- Success Confirmation Modal -->
+  <app-modal [(isOpen)]="isSuccessModalOpen" [title]="'Meal Logged'">
+    <div body class="success-modal-body">
+      <div class="success-icon">🎉</div>
+      <p class="success-text">Your meal has been logged successfully to your daily food log.</p>
+    </div>
+    <div footer class="success-modal-footer">
+      <button type="button" class="btn btn-confirm" (click)="isSuccessModalOpen.set(false)">Close</button>
+    </div>
+  </app-modal>
+
+  <!-- Image Selection Modal -->
+  <app-modal [title]="'Add Food Image'" [(isOpen)]="isImageOptionModalOpen">
+    <div body class="capture-modal-body">
+      @if (imageMode() === 'select') {
+      <div class="option-grid">
+        <div class="option-card" (click)="startCamera()">
+          <div class="option-icon">📷</div>
+          <h4>Take a Photo</h4>
+          <p>Use your device camera to snap a photo of your food.</p>
+        </div>
+        <div class="option-card" (click)="triggerImageUpload(fileInput)">
+          <div class="option-icon">📁</div>
+          <h4>Upload a File</h4>
+          <p>Browse image files saved on your device.</p>
+        </div>
+      </div>
+      } @else if (imageMode() === 'camera') {
+      <div class="camera-container">
+        @if (cameraError()) {
+        <div class="alert-error-banner animate-fade-in">
+          ⚠️ {{ cameraError() }}
+        </div>
+        <button type="button" class="btn btn-outline" (click)="imageMode.set('select')">Back</button>
+        } @else {
+        <div class="video-wrapper">
+          <video #cameraVideo autoplay playsinline class="camera-stream"></video>
+        </div>
+        <div class="camera-controls">
+          <button type="button" class="btn btn-primary btn-capture" (click)="capturePhoto()">
+            📸 Capture Photo
+          </button>
+          <button type="button" class="btn btn-outline" (click)="imageMode.set('select')">
+            Back
+          </button>
+        </div>
+        }
+      </div>
+      }
+    </div>
+    <div footer class="capture-modal-footer">
+      <button type="button" class="btn btn-cancel" (click)="closeImageOptionModal()">Close</button>
+    </div>
+  </app-modal>
+
+  <!-- Voice Recording Modal -->
+  <app-modal [title]="'Add Voice Recording'" [(isOpen)]="isVoiceOptionModalOpen">
+    <div body class="capture-modal-body">
+      @if (voiceMode() === 'select') {
+      <div class="option-grid">
+        <div class="option-card" (click)="startVoiceRecording()">
+          <div class="option-icon">🎙️</div>
+          <h4>Record Voice</h4>
+          <p>Speak directly into your mic to describe your meal.</p>
+        </div>
+        <div class="option-card" (click)="triggerVoiceUpload(voiceFileInput)">
+          <div class="option-icon">📁</div>
+          <h4>Upload a File</h4>
+          <p>Browse audio files saved on your device.</p>
+        </div>
+      </div>
+      } @else if (voiceMode() === 'recording') {
+      <div class="recording-container">
+        @if (voiceError()) {
+        <div class="alert-error-banner animate-fade-in">
+          ⚠️ {{ voiceError() }}
+        </div>
+        <button type="button" class="btn btn-outline" (click)="voiceMode.set('select')">Back</button>
+        } @else {
+        <div class="recording-status">
+          <div class="pulse-mic">🎙️</div>
+          <p class="recording-text pulse-text">Recording voice...</p>
+        </div>
+        <div class="recording-controls">
+          <button type="button" class="btn btn-confirm btn-stop-rec" (click)="stopAndUseVoiceRecording()">
+            ✓ Stop & Use
+          </button>
+          <button type="button" class="btn btn-cancel" (click)="cancelVoiceRecording()">
+            Cancel
+          </button>
+        </div>
+        }
+      </div>
+      }
+    </div>
+    <div footer class="capture-modal-footer">
+      <button type="button" class="btn btn-cancel" (click)="closeVoiceOptionModal()">Close</button>
+    </div>
+  </app-modal>
+
+  <!-- Add More Details Modal -->
+  <app-modal [title]="'Add More Profile Details'" [(isOpen)]="isDetailsModalOpen">
+    <div body class="details-modal-body">
+      <p class="details-modal-desc">Provide additional details about your physical stats, health history, or wellness
+        goals to get more personalized recommendations.</p>
+
+      <div class="textarea-container">
+        <textarea [(ngModel)]="additionalDetailsInput"
+          [placeholder]="detailsPlaceholderText() || 'Share more details...'" rows="3"></textarea>
+      </div>
+    </div>
+    <div footer class="details-modal-footer">
+      <button type="button" class="btn btn-cancel" (click)="isDetailsModalOpen.set(false)">Cancel</button>
+      <button type="button" class="btn btn-primary" [disabled]="isUpdatingDetails() || !additionalDetailsInput().trim()"
+        (click)="submitAdditionalDetails()">
+        @if (isUpdatingDetails()) {
+        <span class="small-spinner"></span> Updating...
+        } @else {
+        Update Details
+        }
+      </button>
+    </div>
+  </app-modal>
+</div>

@@ -1,0 +1,27 @@
+<header class="dashboard-header">
+  <div class="header-logo-nav">
+    <div class="header-logo">
+      <span class="logo-icon">🥗</span>
+      <h1>FoodAnalyzer</h1>
+    </div>
+    
+    <nav class="header-nav">
+      <a routerLink="/dashboard" routerLinkActive="active" class="nav-link">
+        🏠 Home
+      </a>
+      <a routerLink="/logs" routerLinkActive="active" class="nav-link">
+        📋 Logs
+      </a>
+      <a routerLink="/recommendations" routerLinkActive="active" class="nav-link">
+        💡 Recommendations
+      </a>
+    </nav>
+  </div>
+
+  <div class="header-user">
+    <span class="user-greeting">Welcome back, <strong>{{ userName() }}</strong></span>
+    <button class="btn btn-outline" (click)="onLogout()">
+      <span class="btn-icon">🚪</span> Logout
+    </button>
+  </div>
+</header>

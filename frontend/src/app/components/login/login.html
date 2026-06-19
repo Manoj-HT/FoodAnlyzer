@@ -1,0 +1,105 @@
+<div class="auth-container">
+  <div class="glass-card auth-card">
+    <div class="auth-header">
+      <div class="logo">
+        <span class="logo-icon">🥗</span>
+        <h2>FoodAnalyzer</h2>
+      </div>
+      <p class="subtitle">Understand your nutrition, feel your best</p>
+    </div>
+
+    <div class="auth-body">
+      @if (isLoading()) {
+        <div class="spinner-container">
+          <div class="spinner"></div>
+          <p>Processing request...</p>
+        </div>
+      } @else {
+        @if (!isPasswordEnabled()) {
+          <!-- Email Form -->
+          <form (submit)="onSubmitEmail()" class="auth-form">
+            <div class="form-group">
+              <label for="email">Email Address</label>
+              <div class="input-wrapper">
+                <span class="input-icon">📧</span>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  [(ngModel)]="email"
+                  placeholder="name@example.com"
+                  required
+                  autocomplete="email"
+                />
+              </div>
+            </div>
+
+            @if (errorMessage()) {
+              <div class="error-badge">
+                <span class="error-icon">⚠️</span>
+                <span>{{ errorMessage() }}</span>
+              </div>
+            }
+
+            <button type="submit" class="btn btn-primary">
+              Continue
+              <span class="arrow">→</span>
+            </button>
+          </form>
+        } @else {
+          <!-- Password Form -->
+          <form (submit)="onSubmitPassword()" class="auth-form animate-fade-in">
+            <div class="form-group">
+              <label for="email-readonly">Email Address</label>
+              <div class="input-wrapper disabled">
+                <span class="input-icon">📧</span>
+                <input
+                  type="email"
+                  id="email-readonly"
+                  name="email"
+                  [(ngModel)]="email"
+                  readonly
+                  class="readonly-input"
+                />
+                <button type="button" class="change-btn" (click)="resetForm()">Change</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="password">Enter Password</label>
+              <div class="input-wrapper">
+                <span class="input-icon">🔒</span>
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  [(ngModel)]="password"
+                  placeholder="••••••••"
+                  required
+                  autocomplete="current-password"
+                  autofocus
+                />
+              </div>
+            </div>
+
+            @if (errorMessage()) {
+              <div class="error-badge">
+                <span class="error-icon">⚠️</span>
+                <span>{{ errorMessage() }}</span>
+              </div>
+            }
+
+            <button type="submit" class="btn btn-primary">
+              Sign In
+              <span class="arrow">→</span>
+            </button>
+          </form>
+        }
+      }
+    </div>
+
+    <div class="auth-footer">
+      <p>Analyze your meals with AI and custom insights.</p>
+    </div>
+  </div>
+</div>

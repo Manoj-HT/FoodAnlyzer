@@ -1,0 +1,1852 @@
+{
+    "8f28d2aa-d968-42d9-8a35-0ff3a3cf9800": [
+        {
+            "id": "15a4ade8-f776-4616-8704-8687562809e6",
+            "description": "idli sambar",
+            "time": "2026-05-01T04:00",
+            "report": {
+                "calories": 164,
+                "protein": 7,
+                "carbs": 29,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "144337bb-91d8-46b9-8df7-3f467692d62f",
+            "description": "fruit salad",
+            "time": "2026-05-01T09:20",
+            "report": {
+                "calories": 124,
+                "protein": 2,
+                "carbs": 28,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "678b64dc-499b-46a9-b470-25bfe67fb2d2",
+            "description": "protein shake",
+            "time": "2026-05-01T12:20",
+            "report": {
+                "calories": 173,
+                "protein": 28,
+                "carbs": 6,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "6e3bd57d-a929-47a3-b4d0-2a7e03bce2d4",
+            "description": "fried rice",
+            "time": "2026-05-01T16:10",
+            "report": {
+                "calories": 362,
+                "protein": 7,
+                "carbs": 54,
+                "fat": 10,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "4bf84033-8509-4300-aeb3-1d969bceaf02",
+            "description": "sushi",
+            "time": "2026-05-02T02:30",
+            "report": {
+                "calories": 238,
+                "protein": 14,
+                "carbs": 36,
+                "fat": 8,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "b73c4135-3092-4026-aa24-590ee552aa26",
+            "description": "pizza",
+            "time": "2026-05-02T07:45",
+            "report": {
+                "calories": 258,
+                "protein": 10,
+                "carbs": 35,
+                "fat": 12,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "0480dbd8-ab70-4f50-9a08-bff4b37b3a2d",
+            "description": "paneer butter masala",
+            "time": "2026-05-02T11:00",
+            "report": {
+                "calories": 335,
+                "protein": 15,
+                "carbs": 11,
+                "fat": 29,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "c9514e29-9792-4771-ac99-c523e0ec8bd3",
+            "description": "veg biryani",
+            "time": "2026-05-03T03:25",
+            "report": {
+                "calories": 356,
+                "protein": 11,
+                "carbs": 56,
+                "fat": 13,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "71bb5163-e43b-4952-b559-59493f72903e",
+            "description": "protein shake",
+            "time": "2026-05-03T08:15",
+            "report": {
+                "calories": 171,
+                "protein": 30,
+                "carbs": 5,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "e7913755-32a3-409b-8d7e-1c03716bec51",
+            "description": "dal rice",
+            "time": "2026-05-03T15:30",
+            "report": {
+                "calories": 313,
+                "protein": 10,
+                "carbs": 54,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "552c8aa2-1635-4599-b61b-d4b5ca82a5ab",
+            "description": "idli sambar",
+            "time": "2026-05-04T06:45",
+            "report": {
+                "calories": 188,
+                "protein": 6,
+                "carbs": 32,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "9d32d95f-aac7-4953-a6b9-c9657c3407bc",
+            "description": "oatmeal",
+            "time": "2026-05-04T12:05",
+            "report": {
+                "calories": 186,
+                "protein": 6,
+                "carbs": 28,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "bd7addf9-d4db-4b9a-b693-cfe7da00bd4c",
+            "description": "roti sabzi",
+            "time": "2026-05-04T14:25",
+            "report": {
+                "calories": 281,
+                "protein": 9,
+                "carbs": 42,
+                "fat": 6,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "5104db4d-21c6-4667-a386-8ed3a24af040",
+            "description": "fried rice",
+            "time": "2026-05-05T03:10",
+            "report": {
+                "calories": 300,
+                "protein": 7,
+                "carbs": 53,
+                "fat": 10,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "64f22652-6193-445d-a703-a39be590b3b3",
+            "description": "fruit salad",
+            "time": "2026-05-05T07:15",
+            "report": {
+                "calories": 112,
+                "protein": 2,
+                "carbs": 30,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "af6e89ba-7031-41e7-a136-a4a6798d3cb8",
+            "description": "roti sabzi",
+            "time": "2026-05-05T11:35",
+            "report": {
+                "calories": 253,
+                "protein": 9,
+                "carbs": 39,
+                "fat": 6,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "037145a6-5c12-4d6c-8f6d-ee199f0956e4",
+            "description": "fried rice",
+            "time": "2026-05-05T14:35",
+            "report": {
+                "calories": 353,
+                "protein": 9,
+                "carbs": 53,
+                "fat": 11,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "4e52be89-711e-4c40-8bf9-98e0b29d7c5a",
+            "description": "fruit salad",
+            "time": "2026-05-06T04:20",
+            "report": {
+                "calories": 113,
+                "protein": 2,
+                "carbs": 29,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "4855b7c2-fbef-4c70-9ff6-fa3feb48c941",
+            "description": "fried rice",
+            "time": "2026-05-06T07:30",
+            "report": {
+                "calories": 336,
+                "protein": 8,
+                "carbs": 45,
+                "fat": 10,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "1003d6b1-7ec2-4a04-8f86-7790f8303fa3",
+            "description": "masala dosa",
+            "time": "2026-05-06T15:50",
+            "report": {
+                "calories": 347,
+                "protein": 7,
+                "carbs": 49,
+                "fat": 10,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "ec94b1b4-6694-4fca-bd1e-7d76aec3ac8e",
+            "description": "avocado toast",
+            "time": "2026-05-07T03:10",
+            "report": {
+                "calories": 214,
+                "protein": 7,
+                "carbs": 20,
+                "fat": 15,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "0425a951-2045-4ee2-af6e-49b2eccf6bd8",
+            "description": "fried rice",
+            "time": "2026-05-07T08:30",
+            "report": {
+                "calories": 352,
+                "protein": 8,
+                "carbs": 54,
+                "fat": 10,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "8d387de0-eccf-49fd-9219-1f63414708ea",
+            "description": "roti sabzi",
+            "time": "2026-05-07T10:45",
+            "report": {
+                "calories": 253,
+                "protein": 9,
+                "carbs": 42,
+                "fat": 7,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "63fa21c7-7a15-4004-a936-9d698ff1d644",
+            "description": "oatmeal",
+            "time": "2026-05-07T14:35",
+            "report": {
+                "calories": 165,
+                "protein": 6,
+                "carbs": 28,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "44fb2e26-42f9-4204-b82b-795fd03a1711",
+            "description": "sushi",
+            "time": "2026-05-08T04:10",
+            "report": {
+                "calories": 274,
+                "protein": 15,
+                "carbs": 34,
+                "fat": 7,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "88f0913f-4498-4173-b952-2b598ab3e97b",
+            "description": "oatmeal",
+            "time": "2026-05-08T08:20",
+            "report": {
+                "calories": 155,
+                "protein": 7,
+                "carbs": 30,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "e5b41e33-aa60-4516-a011-3a4691d22c16",
+            "description": "masala dosa",
+            "time": "2026-05-08T13:00",
+            "report": {
+                "calories": 298,
+                "protein": 8,
+                "carbs": 47,
+                "fat": 10,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "d70ca689-a050-4763-be84-853714aff337",
+            "description": "dal rice",
+            "time": "2026-05-08T15:25",
+            "report": {
+                "calories": 283,
+                "protein": 12,
+                "carbs": 45,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "460975bd-3619-4557-a6ae-5b8cce1aee81",
+            "description": "burger",
+            "time": "2026-05-09T04:10",
+            "report": {
+                "calories": 399,
+                "protein": 19,
+                "carbs": 34,
+                "fat": 22,
+                "grade": "C"
+            }
+        },
+        {
+            "id": "b6fa8ea9-47f3-41d4-b149-855582cde5ab",
+            "description": "paneer butter masala",
+            "time": "2026-05-09T09:05",
+            "report": {
+                "calories": 316,
+                "protein": 13,
+                "carbs": 12,
+                "fat": 26,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "2676e986-5823-4802-ac22-e9e0dbc5c207",
+            "description": "fruit salad",
+            "time": "2026-05-09T10:45",
+            "report": {
+                "calories": 128,
+                "protein": 2,
+                "carbs": 28,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "0b1b3787-bc7b-4bb3-8c9a-701a2abc3564",
+            "description": "caesar salad",
+            "time": "2026-05-09T15:00",
+            "report": {
+                "calories": 210,
+                "protein": 11,
+                "carbs": 8,
+                "fat": 11,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "faa4477e-ac46-4397-8bca-0913aa413a8a",
+            "description": "grilled chicken",
+            "time": "2026-05-10T02:40",
+            "report": {
+                "calories": 222,
+                "protein": 36,
+                "carbs": 0,
+                "fat": 7,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "33722a56-0815-4c46-bca4-8843312287d3",
+            "description": "dal rice",
+            "time": "2026-05-10T07:35",
+            "report": {
+                "calories": 332,
+                "protein": 11,
+                "carbs": 51,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "063fb253-0e5f-4439-af22-edf91db164ca",
+            "description": "greek yogurt",
+            "time": "2026-05-10T11:00",
+            "report": {
+                "calories": 149,
+                "protein": 17,
+                "carbs": 8,
+                "fat": 4,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "a141004b-a3f4-4522-b785-fbf82e9f76d9",
+            "description": "avocado toast",
+            "time": "2026-05-10T14:20",
+            "report": {
+                "calories": 212,
+                "protein": 7,
+                "carbs": 22,
+                "fat": 14,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "21c4654a-5d20-4829-aef3-455f008cbdaf",
+            "description": "oatmeal",
+            "time": "2026-05-11T01:45",
+            "report": {
+                "calories": 177,
+                "protein": 7,
+                "carbs": 33,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "1eac1025-a341-4458-9a2a-4f07d28383c9",
+            "description": "idli sambar",
+            "time": "2026-05-11T07:15",
+            "report": {
+                "calories": 193,
+                "protein": 7,
+                "carbs": 28,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "ec6f7bd9-4b4f-4b0b-8526-4c6a6cc6bebe",
+            "description": "burger",
+            "time": "2026-05-11T10:40",
+            "report": {
+                "calories": 443,
+                "protein": 18,
+                "carbs": 34,
+                "fat": 20,
+                "grade": "C"
+            }
+        },
+        {
+            "id": "040bf413-22c4-424f-aefe-132a751f8b70",
+            "description": "idli sambar",
+            "time": "2026-05-12T04:20",
+            "report": {
+                "calories": 160,
+                "protein": 7,
+                "carbs": 33,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "0b317316-0f69-4771-845c-18952fe9e278",
+            "description": "fruit salad",
+            "time": "2026-05-12T09:10",
+            "report": {
+                "calories": 125,
+                "protein": 2,
+                "carbs": 29,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "27ca1856-0b9a-4bb2-bf05-0e336705b84d",
+            "description": "oatmeal",
+            "time": "2026-05-12T10:50",
+            "report": {
+                "calories": 175,
+                "protein": 6,
+                "carbs": 30,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "4772b559-8865-49b6-a4b5-977a20f00b6b",
+            "description": "fruit salad",
+            "time": "2026-05-12T14:40",
+            "report": {
+                "calories": 117,
+                "protein": 2,
+                "carbs": 28,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "430927a8-0400-40df-9d31-59f71f7d2ada",
+            "description": "idli sambar",
+            "time": "2026-05-13T01:30",
+            "report": {
+                "calories": 176,
+                "protein": 6,
+                "carbs": 33,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "d9d833f7-65a4-4de1-988f-5eb3612177b3",
+            "description": "idli sambar",
+            "time": "2026-05-13T09:25",
+            "report": {
+                "calories": 164,
+                "protein": 6,
+                "carbs": 30,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "dc4a3fd5-8f4d-4f2e-a01f-d38c0f3f9a4f",
+            "description": "paneer butter masala",
+            "time": "2026-05-13T13:10",
+            "report": {
+                "calories": 332,
+                "protein": 15,
+                "carbs": 12,
+                "fat": 27,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "34de7d24-d991-436a-9743-308477bbe51d",
+            "description": "idli sambar",
+            "time": "2026-05-14T03:50",
+            "report": {
+                "calories": 197,
+                "protein": 5,
+                "carbs": 33,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "03c3255e-1c4b-4133-a183-c3ad6aa9d6ff",
+            "description": "dal rice",
+            "time": "2026-05-14T07:20",
+            "report": {
+                "calories": 335,
+                "protein": 10,
+                "carbs": 53,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "dff133e1-181b-4edb-99d3-8a4d04366ac3",
+            "description": "pasta",
+            "time": "2026-05-14T12:20",
+            "report": {
+                "calories": 379,
+                "protein": 12,
+                "carbs": 54,
+                "fat": 8,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "a317bd2b-704c-4323-8c22-c01a613455f7",
+            "description": "protein shake",
+            "time": "2026-05-14T15:00",
+            "report": {
+                "calories": 177,
+                "protein": 30,
+                "carbs": 6,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "74b54d25-b824-4e3d-8436-751a71180e75",
+            "description": "fried rice",
+            "time": "2026-05-15T03:05",
+            "report": {
+                "calories": 298,
+                "protein": 8,
+                "carbs": 56,
+                "fat": 9,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "27cae010-8dc9-433a-af9c-186933149c2d",
+            "description": "burger",
+            "time": "2026-05-15T06:35",
+            "report": {
+                "calories": 413,
+                "protein": 21,
+                "carbs": 37,
+                "fat": 21,
+                "grade": "C"
+            }
+        },
+        {
+            "id": "f2b3f178-37c4-4ab0-9e06-8fe224f6e1f7",
+            "description": "greek yogurt",
+            "time": "2026-05-15T10:35",
+            "report": {
+                "calories": 145,
+                "protein": 15,
+                "carbs": 8,
+                "fat": 4,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "6cbb0cf9-fbea-4adc-980a-ad873a8ad8b4",
+            "description": "oatmeal",
+            "time": "2026-05-16T03:25",
+            "report": {
+                "calories": 158,
+                "protein": 6,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "0d49fb63-fc1a-4134-ac9d-6d664529b689",
+            "description": "dal rice",
+            "time": "2026-05-16T06:45",
+            "report": {
+                "calories": 280,
+                "protein": 11,
+                "carbs": 50,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "cc2820a2-b284-40a4-81a7-97f008b9c0fa",
+            "description": "paneer butter masala",
+            "time": "2026-05-16T12:30",
+            "report": {
+                "calories": 318,
+                "protein": 15,
+                "carbs": 12,
+                "fat": 26,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "4e078ddc-2468-4c2c-8293-b72c51a8925a",
+            "description": "grilled chicken",
+            "time": "2026-05-16T15:25",
+            "report": {
+                "calories": 197,
+                "protein": 38,
+                "carbs": 0,
+                "fat": 8,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "3c0179ec-db59-42ec-bafd-ddd0379c7f25",
+            "description": "greek yogurt",
+            "time": "2026-05-17T06:40",
+            "report": {
+                "calories": 130,
+                "protein": 15,
+                "carbs": 8,
+                "fat": 4,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "32afde78-c0b4-4f62-b233-fe2d3df811f0",
+            "description": "dal rice",
+            "time": "2026-05-17T11:15",
+            "report": {
+                "calories": 269,
+                "protein": 11,
+                "carbs": 53,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "0fadebe2-8fae-43b8-af1e-656c24af1617",
+            "description": "fruit salad",
+            "time": "2026-05-17T13:45",
+            "report": {
+                "calories": 133,
+                "protein": 2,
+                "carbs": 25,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "dd85e60f-946d-4ebb-8db8-b83d80523c87",
+            "description": "dal rice",
+            "time": "2026-05-18T03:10",
+            "report": {
+                "calories": 289,
+                "protein": 12,
+                "carbs": 48,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "434fe24b-dff1-4644-b99e-0931759a3a57",
+            "description": "protein shake",
+            "time": "2026-05-18T08:15",
+            "report": {
+                "calories": 182,
+                "protein": 32,
+                "carbs": 6,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "c0f51902-50e9-47eb-a7f4-7ca0e9e899b1",
+            "description": "grilled chicken",
+            "time": "2026-05-18T10:50",
+            "report": {
+                "calories": 227,
+                "protein": 35,
+                "carbs": 0,
+                "fat": 8,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "a11d710b-08ab-46bf-90a2-398d0e1f5293",
+            "description": "paneer butter masala",
+            "time": "2026-05-18T16:15",
+            "report": {
+                "calories": 324,
+                "protein": 14,
+                "carbs": 13,
+                "fat": 26,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "63fc132d-312b-4bc8-a690-5c892c2d99a9",
+            "description": "fried rice",
+            "time": "2026-05-19T02:00",
+            "report": {
+                "calories": 297,
+                "protein": 7,
+                "carbs": 48,
+                "fat": 9,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "b459ef5a-0310-4abd-b5fe-c63ac87480af",
+            "description": "avocado toast",
+            "time": "2026-05-19T09:00",
+            "report": {
+                "calories": 242,
+                "protein": 8,
+                "carbs": 23,
+                "fat": 14,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "c0d420b4-6460-4263-b70c-de37975901b2",
+            "description": "avocado toast",
+            "time": "2026-05-19T11:15",
+            "report": {
+                "calories": 244,
+                "protein": 7,
+                "carbs": 24,
+                "fat": 14,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "603d22c7-0035-42ae-8130-74d7c48f38cf",
+            "description": "sandwich",
+            "time": "2026-05-19T14:20",
+            "report": {
+                "calories": 238,
+                "protein": 13,
+                "carbs": 27,
+                "fat": 8,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "ec521cbd-750b-46de-ab3d-3519ac75b42f",
+            "description": "roti sabzi",
+            "time": "2026-05-20T02:10",
+            "report": {
+                "calories": 255,
+                "protein": 8,
+                "carbs": 41,
+                "fat": 6,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "a254bd99-c808-46c1-b228-aec51920d09c",
+            "description": "roti sabzi",
+            "time": "2026-05-20T07:00",
+            "report": {
+                "calories": 251,
+                "protein": 8,
+                "carbs": 43,
+                "fat": 6,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "034ccec0-1b11-4c71-92a9-d939f1ef9bad",
+            "description": "chicken biryani",
+            "time": "2026-05-20T10:40",
+            "report": {
+                "calories": 510,
+                "protein": 26,
+                "carbs": 58,
+                "fat": 19,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "274b4b22-1675-47e1-bdc6-40848483e907",
+            "description": "dal rice",
+            "time": "2026-05-20T15:05",
+            "report": {
+                "calories": 332,
+                "protein": 11,
+                "carbs": 45,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "bab15204-b3b3-4d64-9bff-8aa4330e2b38",
+            "description": "fruit salad",
+            "time": "2026-05-21T04:25",
+            "report": {
+                "calories": 108,
+                "protein": 2,
+                "carbs": 27,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "a4c5e522-2e46-417b-aa13-149cf020aecd",
+            "description": "pizza",
+            "time": "2026-05-21T08:15",
+            "report": {
+                "calories": 274,
+                "protein": 9,
+                "carbs": 31,
+                "fat": 11,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "94bd5275-f18c-4ea3-bbda-51b0045ef270",
+            "description": "paneer butter masala",
+            "time": "2026-05-21T10:35",
+            "report": {
+                "calories": 304,
+                "protein": 15,
+                "carbs": 12,
+                "fat": 25,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "7126b88a-9cf7-4a39-a7f8-5cad43b78f57",
+            "description": "dal rice",
+            "time": "2026-05-21T16:00",
+            "report": {
+                "calories": 271,
+                "protein": 11,
+                "carbs": 48,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "48f02b70-f52d-4909-a768-aabdc8cccb60",
+            "description": "chicken biryani",
+            "time": "2026-05-22T02:30",
+            "report": {
+                "calories": 508,
+                "protein": 28,
+                "carbs": 59,
+                "fat": 20,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "a36c0e56-69ce-4a52-a73b-1d34469c294b",
+            "description": "sushi",
+            "time": "2026-05-22T06:30",
+            "report": {
+                "calories": 266,
+                "protein": 14,
+                "carbs": 36,
+                "fat": 7,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "507dcbde-830a-41de-9cee-b403c1ccae89",
+            "description": "masala dosa",
+            "time": "2026-05-22T13:50",
+            "report": {
+                "calories": 289,
+                "protein": 8,
+                "carbs": 48,
+                "fat": 10,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "d997326b-375c-46f2-867d-d9c2d861d026",
+            "description": "burger",
+            "time": "2026-05-23T04:15",
+            "report": {
+                "calories": 463,
+                "protein": 19,
+                "carbs": 38,
+                "fat": 22,
+                "grade": "C"
+            }
+        },
+        {
+            "id": "5db59f52-256b-4d71-9850-88da27ab149a",
+            "description": "fried rice",
+            "time": "2026-05-23T07:00",
+            "report": {
+                "calories": 336,
+                "protein": 9,
+                "carbs": 52,
+                "fat": 9,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "a81b4582-3b92-4293-98c9-b311e6b8e32a",
+            "description": "protein shake",
+            "time": "2026-05-23T12:15",
+            "report": {
+                "calories": 172,
+                "protein": 32,
+                "carbs": 6,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "e06aaa31-d3f2-4924-aa00-082bf6e1d7a2",
+            "description": "greek yogurt",
+            "time": "2026-05-23T15:25",
+            "report": {
+                "calories": 154,
+                "protein": 15,
+                "carbs": 8,
+                "fat": 4,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "932dec10-1155-4472-a9ce-113815bb1ea8",
+            "description": "fried rice",
+            "time": "2026-05-24T02:35",
+            "report": {
+                "calories": 308,
+                "protein": 9,
+                "carbs": 56,
+                "fat": 9,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "3e1ee044-5f27-4733-b536-b880af5d4e0b",
+            "description": "oatmeal",
+            "time": "2026-05-24T07:05",
+            "report": {
+                "calories": 150,
+                "protein": 6,
+                "carbs": 31,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "e0bbf95f-6d9c-49ab-826f-caa9d6158500",
+            "description": "protein shake",
+            "time": "2026-05-24T11:00",
+            "report": {
+                "calories": 184,
+                "protein": 30,
+                "carbs": 6,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "d94a2cd3-3232-4e78-b8d2-7287366e48f0",
+            "description": "roti sabzi",
+            "time": "2026-05-24T14:15",
+            "report": {
+                "calories": 266,
+                "protein": 8,
+                "carbs": 42,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "23d229b0-d1f4-49cc-b430-2cac1f835174",
+            "description": "fruit salad",
+            "time": "2026-05-25T02:50",
+            "report": {
+                "calories": 117,
+                "protein": 2,
+                "carbs": 31,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "5424492d-67c2-42bf-acfc-9bea3e5803ab",
+            "description": "roti sabzi",
+            "time": "2026-05-25T11:05",
+            "report": {
+                "calories": 291,
+                "protein": 10,
+                "carbs": 37,
+                "fat": 6,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "d9b52f4b-8d95-4f5b-9bbf-3f1cc9d545b4",
+            "description": "masala dosa",
+            "time": "2026-05-25T15:50",
+            "report": {
+                "calories": 289,
+                "protein": 9,
+                "carbs": 49,
+                "fat": 10,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "2388bd9e-ddd1-43ce-a46e-952c62dc52e9",
+            "description": "oatmeal",
+            "time": "2026-05-26T04:15",
+            "report": {
+                "calories": 160,
+                "protein": 6,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "bea8a32d-e3f2-4b07-963b-482cb5c0cb36",
+            "description": "sandwich",
+            "time": "2026-05-26T09:10",
+            "report": {
+                "calories": 268,
+                "protein": 13,
+                "carbs": 27,
+                "fat": 9,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "53914725-8bb0-49de-a680-929dea97cac3",
+            "description": "fried rice",
+            "time": "2026-05-26T15:35",
+            "report": {
+                "calories": 327,
+                "protein": 9,
+                "carbs": 52,
+                "fat": 9,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "55c7ab7a-2696-416d-9f58-ce344883fed2",
+            "description": "dal rice",
+            "time": "2026-05-27T03:40",
+            "report": {
+                "calories": 320,
+                "protein": 10,
+                "carbs": 48,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "51663edf-a783-4219-a50f-1303da5d34e5",
+            "description": "protein shake",
+            "time": "2026-05-27T07:25",
+            "report": {
+                "calories": 173,
+                "protein": 30,
+                "carbs": 6,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "9d26b570-443e-4764-8c11-345cb92dac70",
+            "description": "avocado toast",
+            "time": "2026-05-27T10:40",
+            "report": {
+                "calories": 236,
+                "protein": 6,
+                "carbs": 24,
+                "fat": 13,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "ae617d78-b4c6-47a2-af2f-f8e46891edb3",
+            "description": "pasta",
+            "time": "2026-05-27T16:00",
+            "report": {
+                "calories": 366,
+                "protein": 12,
+                "carbs": 54,
+                "fat": 7,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "6ae3a070-3495-493e-b87a-82d8da7a9e15",
+            "description": "sandwich",
+            "time": "2026-05-28T02:00",
+            "report": {
+                "calories": 233,
+                "protein": 13,
+                "carbs": 32,
+                "fat": 8,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "5a609a52-aef3-4158-87c5-c946e2ba4d5c",
+            "description": "paneer butter masala",
+            "time": "2026-05-28T07:50",
+            "report": {
+                "calories": 347,
+                "protein": 14,
+                "carbs": 11,
+                "fat": 24,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "27d8bbec-063b-4bf3-a172-526662a94ee1",
+            "description": "burger",
+            "time": "2026-05-28T12:00",
+            "report": {
+                "calories": 423,
+                "protein": 20,
+                "carbs": 34,
+                "fat": 20,
+                "grade": "C"
+            }
+        },
+        {
+            "id": "9ccb71e8-5fdb-4a5d-a250-024198ee31d3",
+            "description": "paneer butter masala",
+            "time": "2026-05-29T02:10",
+            "report": {
+                "calories": 353,
+                "protein": 14,
+                "carbs": 12,
+                "fat": 24,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "cf369576-a634-4c91-9ff2-3b9cf8ac5326",
+            "description": "paneer butter masala",
+            "time": "2026-05-29T08:20",
+            "report": {
+                "calories": 379,
+                "protein": 12,
+                "carbs": 11,
+                "fat": 27,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "e6dcba8d-fab7-461f-af59-89b3e6d30c75",
+            "description": "chicken biryani",
+            "time": "2026-05-29T12:40",
+            "report": {
+                "calories": 536,
+                "protein": 29,
+                "carbs": 51,
+                "fat": 20,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "412829d4-fb41-4c0a-8061-227e6c8b2805",
+            "description": "avocado toast",
+            "time": "2026-05-29T15:45",
+            "report": {
+                "calories": 228,
+                "protein": 7,
+                "carbs": 22,
+                "fat": 14,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "038cfc0f-f12c-4d8d-baec-1d2ea2bc521b",
+            "description": "veg biryani",
+            "time": "2026-05-30T07:40",
+            "report": {
+                "calories": 374,
+                "protein": 9,
+                "carbs": 52,
+                "fat": 11,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "f7ffe6f8-4005-4b99-bdde-2773b916930a",
+            "description": "roti sabzi",
+            "time": "2026-05-30T10:40",
+            "report": {
+                "calories": 290,
+                "protein": 8,
+                "carbs": 37,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "54c20d53-669a-4a62-b2df-648a7c5897d3",
+            "description": "pasta",
+            "time": "2026-05-30T16:05",
+            "report": {
+                "calories": 367,
+                "protein": 13,
+                "carbs": 58,
+                "fat": 9,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "eb2eab14-aab8-4de8-b375-9c149577a1d1",
+            "description": "avocado toast",
+            "time": "2026-05-31T03:25",
+            "report": {
+                "calories": 260,
+                "protein": 7,
+                "carbs": 22,
+                "fat": 13,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "a1a4b7c9-846a-436a-9993-a65902850fe9",
+            "description": "sushi",
+            "time": "2026-05-31T08:45",
+            "report": {
+                "calories": 265,
+                "protein": 14,
+                "carbs": 33,
+                "fat": 7,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "7f7cd860-1cd3-4184-9d37-f131db5f1061",
+            "description": "veg biryani",
+            "time": "2026-05-31T11:25",
+            "report": {
+                "calories": 348,
+                "protein": 9,
+                "carbs": 53,
+                "fat": 11,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "e42bf4f2-673e-4c64-af36-3c4735e9308b",
+            "description": "greek yogurt",
+            "time": "2026-06-01T02:05",
+            "report": {
+                "calories": 126,
+                "protein": 15,
+                "carbs": 7,
+                "fat": 4,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "b103b369-b7ca-4d89-9525-1079dcbf6c61",
+            "description": "paneer butter masala",
+            "time": "2026-06-01T07:35",
+            "report": {
+                "calories": 362,
+                "protein": 13,
+                "carbs": 12,
+                "fat": 23,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "9585bbac-a055-4db0-a62e-8915de4661ef",
+            "description": "greek yogurt",
+            "time": "2026-06-01T12:40",
+            "report": {
+                "calories": 130,
+                "protein": 15,
+                "carbs": 8,
+                "fat": 4,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "df6164c4-da40-47b4-9e1a-f1cd1b831f1b",
+            "description": "paneer butter masala",
+            "time": "2026-06-01T15:10",
+            "report": {
+                "calories": 338,
+                "protein": 13,
+                "carbs": 13,
+                "fat": 28,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "b12ac65a-9a4f-45c5-bbd0-5243df21dcc3",
+            "description": "fruit salad",
+            "time": "2026-06-02T01:40",
+            "report": {
+                "calories": 129,
+                "protein": 2,
+                "carbs": 30,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "23bf6409-3cdf-464d-af80-3879b5bd0e39",
+            "description": "burger",
+            "time": "2026-06-02T07:50",
+            "report": {
+                "calories": 390,
+                "protein": 19,
+                "carbs": 34,
+                "fat": 23,
+                "grade": "C"
+            }
+        },
+        {
+            "id": "0b6a46d6-e7eb-4f33-84aa-64a70a50ed4a",
+            "description": "roti sabzi",
+            "time": "2026-06-02T12:35",
+            "report": {
+                "calories": 298,
+                "protein": 9,
+                "carbs": 47,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "6b3f13b6-42b4-4206-80e3-21beaa66fa12",
+            "description": "grilled chicken",
+            "time": "2026-06-02T16:05",
+            "report": {
+                "calories": 228,
+                "protein": 37,
+                "carbs": 0,
+                "fat": 7,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "670c9938-d373-4948-8f7a-a66e4a87e8b2",
+            "description": "fruit salad",
+            "time": "2026-06-03T04:20",
+            "report": {
+                "calories": 130,
+                "protein": 2,
+                "carbs": 29,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "59b2aca0-b871-43a1-8b73-d041f6dc2355",
+            "description": "roti sabzi",
+            "time": "2026-06-03T07:05",
+            "report": {
+                "calories": 259,
+                "protein": 9,
+                "carbs": 42,
+                "fat": 6,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "1f0db712-94c7-4f7c-a99b-61203502b784",
+            "description": "oatmeal",
+            "time": "2026-06-03T12:20",
+            "report": {
+                "calories": 187,
+                "protein": 6,
+                "carbs": 31,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "5d6ab16e-4715-4376-b9d2-ecfa4c7205f7",
+            "description": "dal rice",
+            "time": "2026-06-04T09:05",
+            "report": {
+                "calories": 278,
+                "protein": 11,
+                "carbs": 55,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "6a7e985f-c1e2-4c23-90f2-cb4a825ed662",
+            "description": "greek yogurt",
+            "time": "2026-06-04T11:00",
+            "report": {
+                "calories": 134,
+                "protein": 14,
+                "carbs": 8,
+                "fat": 4,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "7fbf9443-38a4-4db8-8034-c6a7489732dc",
+            "description": "avocado toast",
+            "time": "2026-06-04T14:25",
+            "report": {
+                "calories": 252,
+                "protein": 7,
+                "carbs": 20,
+                "fat": 14,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "6ae5c005-2dab-4dbe-a594-01c272786110",
+            "description": "masala dosa",
+            "time": "2026-06-05T07:35",
+            "report": {
+                "calories": 285,
+                "protein": 8,
+                "carbs": 53,
+                "fat": 11,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "aabda6c8-ab0e-447c-a19c-3c748dbbea92",
+            "description": "protein shake",
+            "time": "2026-06-05T12:40",
+            "report": {
+                "calories": 162,
+                "protein": 32,
+                "carbs": 6,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "cbd88cf1-48ea-4919-9b86-9269f221320c",
+            "description": "fruit salad",
+            "time": "2026-06-05T14:35",
+            "report": {
+                "calories": 111,
+                "protein": 2,
+                "carbs": 30,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "d914f069-6bd6-499b-a6fd-e276856cf340",
+            "description": "fried rice",
+            "time": "2026-06-06T04:15",
+            "report": {
+                "calories": 356,
+                "protein": 7,
+                "carbs": 49,
+                "fat": 11,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "d7d47ea4-4e1c-4814-ac89-c21687a7b330",
+            "description": "chicken biryani",
+            "time": "2026-06-06T07:20",
+            "report": {
+                "calories": 507,
+                "protein": 29,
+                "carbs": 55,
+                "fat": 17,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "3135f65f-5d32-4d54-9f92-95457f149c64",
+            "description": "dal rice",
+            "time": "2026-06-06T11:25",
+            "report": {
+                "calories": 290,
+                "protein": 10,
+                "carbs": 47,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "88a0f0af-94bb-4afb-9b02-654ed17ef39c",
+            "description": "chicken biryani",
+            "time": "2026-06-06T15:10",
+            "report": {
+                "calories": 450,
+                "protein": 27,
+                "carbs": 55,
+                "fat": 17,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "fa85ff13-3492-4fde-9787-03a580143083",
+            "description": "avocado toast",
+            "time": "2026-06-07T03:20",
+            "report": {
+                "calories": 258,
+                "protein": 6,
+                "carbs": 21,
+                "fat": 15,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "6a4319c8-a5cb-411f-8ad8-d8de7500476f",
+            "description": "protein shake",
+            "time": "2026-06-07T07:45",
+            "report": {
+                "calories": 188,
+                "protein": 30,
+                "carbs": 6,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "251fc7f5-b2c2-4302-9e80-2dd7abb0f2c3",
+            "description": "idli sambar",
+            "time": "2026-06-07T11:00",
+            "report": {
+                "calories": 192,
+                "protein": 6,
+                "carbs": 33,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "8ddb0c4a-b14b-44cf-b0fa-8ca05d59f222",
+            "description": "idli sambar",
+            "time": "2026-06-07T15:10",
+            "report": {
+                "calories": 170,
+                "protein": 6,
+                "carbs": 32,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "347591e3-241b-47f3-801a-5bd2750c4202",
+            "description": "dal rice",
+            "time": "2026-06-08T04:05",
+            "report": {
+                "calories": 271,
+                "protein": 12,
+                "carbs": 45,
+                "fat": 5,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "fe50aefe-d12a-4ea2-bbcd-ce2da0c83491",
+            "description": "fruit salad",
+            "time": "2026-06-08T09:00",
+            "report": {
+                "calories": 119,
+                "protein": 2,
+                "carbs": 27,
+                "fat": 0,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "460fe3c5-4fac-40b8-9b64-f280f037addb",
+            "description": "roti sabzi",
+            "time": "2026-06-08T13:15",
+            "report": {
+                "calories": 265,
+                "protein": 8,
+                "carbs": 45,
+                "fat": 6,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "f5c67c24-f089-44ab-8e4d-efc8cfaab9cb",
+            "description": "paneer butter masala",
+            "time": "2026-06-08T13:40",
+            "report": {
+                "calories": 313,
+                "protein": 13,
+                "carbs": 12,
+                "fat": 26,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "56b5cd27-6ca0-4dcf-ad74-ef3b7d7de163",
+            "description": "pasta",
+            "time": "2026-06-09T02:45",
+            "report": {
+                "calories": 338,
+                "protein": 12,
+                "carbs": 59,
+                "fat": 7,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "479a4f1f-8894-461a-86be-a50d982b2668",
+            "description": "sushi",
+            "time": "2026-06-09T08:05",
+            "report": {
+                "calories": 272,
+                "protein": 13,
+                "carbs": 35,
+                "fat": 7,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "5c90eb20-150e-44b7-b453-9aa76c094c0a",
+            "description": "pasta",
+            "time": "2026-06-09T11:40",
+            "report": {
+                "calories": 373,
+                "protein": 11,
+                "carbs": 67,
+                "fat": 8,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "9f29603c-b0ec-4452-a13e-029bc557742e",
+            "description": "oatmeal",
+            "time": "2026-06-10T03:20",
+            "report": {
+                "calories": 159,
+                "protein": 6,
+                "carbs": 32,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "fd7dfceb-c3e8-4091-9af3-628498085978",
+            "description": "veg biryani",
+            "time": "2026-06-10T06:50",
+            "report": {
+                "calories": 353,
+                "protein": 11,
+                "carbs": 59,
+                "fat": 11,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "cf9db290-2016-4324-9e50-10b7d49bad7c",
+            "description": "grilled chicken",
+            "time": "2026-06-10T12:35",
+            "report": {
+                "calories": 206,
+                "protein": 37,
+                "carbs": 0,
+                "fat": 8,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "0b35eba2-168a-4ec6-a439-d24b089a7131",
+            "description": "dal rice",
+            "time": "2026-06-10T15:20",
+            "report": {
+                "calories": 304,
+                "protein": 11,
+                "carbs": 48,
+                "fat": 4,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "29415489-375d-4446-9fd4-010d492c2fee",
+            "description": "paneer butter masala",
+            "time": "2026-06-11T01:40",
+            "report": {
+                "calories": 362,
+                "protein": 14,
+                "carbs": 13,
+                "fat": 25,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "c7cbb692-39cd-40f0-8a63-5756ebce4e31",
+            "description": "sandwich",
+            "time": "2026-06-11T08:20",
+            "report": {
+                "calories": 244,
+                "protein": 11,
+                "carbs": 29,
+                "fat": 8,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "20a67496-a49d-45e4-9c35-28f399f3a444",
+            "description": "burger",
+            "time": "2026-06-11T12:50",
+            "report": {
+                "calories": 449,
+                "protein": 20,
+                "carbs": 35,
+                "fat": 25,
+                "grade": "C"
+            }
+        },
+        {
+            "id": "604e1270-0018-4085-a0c7-d1e812d20d8f",
+            "description": "pizza",
+            "time": "2026-06-11T16:25",
+            "report": {
+                "calories": 291,
+                "protein": 10,
+                "carbs": 35,
+                "fat": 13,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "3552f7cb-c0c6-4d78-b50e-645a4d5e05b1",
+            "description": "idli sambar",
+            "time": "2026-06-12T04:05",
+            "report": {
+                "calories": 180,
+                "protein": 6,
+                "carbs": 30,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "591d653e-4083-4949-ae69-69fe15f24a15",
+            "description": "veg biryani",
+            "time": "2026-06-12T08:20",
+            "report": {
+                "calories": 412,
+                "protein": 10,
+                "carbs": 55,
+                "fat": 11,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "b050f158-8d1e-46b2-bb5b-6cc9bc2fca42",
+            "description": "idli sambar",
+            "time": "2026-06-12T13:25",
+            "report": {
+                "calories": 195,
+                "protein": 6,
+                "carbs": 30,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "a4c35ace-9c8b-48e8-bbc0-396e7ec33344",
+            "description": "greek yogurt",
+            "time": "2026-06-12T15:35",
+            "report": {
+                "calories": 135,
+                "protein": 14,
+                "carbs": 7,
+                "fat": 4,
+                "grade": "A"
+            }
+        }
+    ]
+}

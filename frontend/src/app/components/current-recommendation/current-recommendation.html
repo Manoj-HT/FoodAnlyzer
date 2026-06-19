@@ -1,0 +1,263 @@
+<div class="recommendations-page-container">
+  <!-- Shared Navigation Component -->
+  <app-navigation></app-navigation>
+
+  <main class="recommendations-content">
+    <div class="recommendations-header-section">
+      <h2>💡 Personalized Recommendations</h2>
+      <p class="subtitle">Tailored nutrition insights, monthly consolidations, and weekly aggregation history.</p>
+    </div>
+
+    @if (isLoading()) {
+    <div class="loader-container">
+      <div class="spinner"></div>
+      <p>Analyzing profile details and compiling monthly report...</p>
+    </div>
+    } @else {
+    <!-- Goals Badges Section -->
+    <div class="goals-card glass-card">
+      <h3>🎯 Identified Targets</h3>
+      <div class="goals-badge-grid">
+        @for (goal of wellnessGoals(); track goal) {
+        <span class="goal-badge">✔ {{ goal }}</span>
+        }
+      </div>
+    </div>
+
+    <!-- AI Monthly Insights Section -->
+    @if (monthlyData()) {
+    <div class="insights-card glass-card glowing-card">
+      <header class="card-header animate-fade-in">
+        <div class="header-left">
+          <span class="card-emoji">✨</span>
+          <div class="header-text-block">
+            <h4>Monthly AI Insights</h4>
+            <div class="meta-row">
+              <span class="meta-pill">v{{ monthlyData().insight_version }}</span>
+              <span class="meta-pill">Snapshot 1.0.0</span>
+            </div>
+          </div>
+        </div>
+        <span class="gen-time">Last compiled: {{ formatDate(monthlyData().last_insight_generated_time) }}</span>
+      </header>
+
+      <div class="insights-content-body">
+        @if (isGenerating()) {
+        <div class="terminal-container">
+          <div class="terminal-header">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+            <span class="terminal-title">Console Output - gemma3:4b</span>
+          </div>
+          <pre class="terminal-body"><code>{{ streamText() }}</code><span class="cursor">_</span></pre>
+        </div>
+        } @else if (monthlyData().insights && monthlyData().insights.length > 0) {
+        <ul class="insights-list">
+          @for (insight of monthlyData().insights; track insight) {
+          <li>
+            <span class="bullet-star">✨</span>
+            <span class="insight-text">{{ insight }}</span>
+          </li>
+          }
+        </ul>
+        } @else {
+        <p class="no-insights">No specific insights generated yet. Log more meals to see AI suggestions.</p>
+        }
+      </div>
+    </div>
+
+    <!-- Monthly Nutritional Snapshot Section -->
+    <h3 class="section-title">📊 Monthly Aggregation Snapshot</h3>
+    <div class="snapshot-grid">
+      <!-- Calorie Metrics Card -->
+      <div class="snapshot-card glass-card">
+        <div class="card-inner-header">
+          <span class="small-emoji">🔥</span>
+          <h5>Energy & Logs</h5>
+        </div>
+        <div class="metric-block">
+          <span class="metric-value">{{ monthlyData().monthly_average_calories }} <span
+              class="metric-unit">kcal/day</span></span>
+          <span class="metric-label">Daily Avg. Calories</span>
+        </div>
+        <div class="sub-metrics">
+          <div class="sub-metric">
+            <span class="sub-value">{{ monthlyData().average_calories_per_meal }} kcal</span>
+            <span class="sub-label">Per Meal Avg</span>
+          </div>
+          <div class="sub-divider"></div>
+          <div class="sub-metric">
+            <span class="sub-value">{{ monthlyData().total_meals_logged }}</span>
+            <span class="sub-label">Total Meals</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Macros & Grade Card -->
+      <div class="snapshot-card glass-card">
+        <div class="card-inner-header">
+          <span class="small-emoji">🥗</span>
+          <h5>Macronutrients</h5>
+        </div>
+        <div class="macros-breakdown">
+          <div class="macro-line">
+            <span class="macro-name">Protein</span>
+            <span class="macro-val">{{ monthlyData().monthly_average_nutrition.average_protein }}g</span>
+          </div>
+          <div class="macro-line">
+            <span class="macro-name">Carbs</span>
+            <span class="macro-val">{{ monthlyData().monthly_average_nutrition.average_carbs }}g</span>
+          </div>
+          <div class="macro-line">
+            <span class="macro-name">Fat</span>
+            <span class="macro-val">{{ monthlyData().monthly_average_nutrition.average_fat }}g</span>
+          </div>
+        </div>
+        <div class="grade-block">
+          <span class="grade-label">Average Grade:</span>
+          <span class="grade-badge"
+            [ngClass]="getGradeColorClass(monthlyData().monthly_average_nutrition.average_grade)">
+            {{ monthlyData().monthly_average_nutrition.average_grade }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Time of Consumption Card -->
+      <div class="snapshot-card glass-card">
+        <div class="card-inner-header">
+          <span class="small-emoji">⏰</span>
+          <h5>Meal Timing</h5>
+        </div>
+        <div class="times-list">
+          <div class="time-item">
+            <span class="time-name">🌅 Morning</span>
+            <span class="time-val">{{ monthlyData().time_of_consumption.morning.avg_time }} ({{
+              monthlyData().time_of_consumption.morning.count }} meals)</span>
+          </div>
+          <div class="time-item">
+            <span class="time-name">☀️ Afternoon</span>
+            <span class="time-val">{{ monthlyData().time_of_consumption.afternoon.avg_time }} ({{
+              monthlyData().time_of_consumption.afternoon.count }} meals)</span>
+          </div>
+          <div class="time-item">
+            <span class="time-name">🌆 Evening</span>
+            <span class="time-val">{{ monthlyData().time_of_consumption.evening.avg_time }} ({{
+              monthlyData().time_of_consumption.evening.count }} meals)</span>
+          </div>
+          <div class="time-item">
+            <span class="time-name">🌙 Night</span>
+            <span class="time-val">{{ monthlyData().time_of_consumption.night.avg_time }} ({{
+              monthlyData().time_of_consumption.night.count }} meals)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Consumed Foods Card -->
+      <div class="snapshot-card glass-card full-row-mobile">
+        <div class="card-inner-header">
+          <span class="small-emoji">🍎</span>
+          <h5>Top Consumed Foods</h5>
+        </div>
+        @if (monthlyData().distinct_foods && monthlyData().distinct_foods.length > 0) {
+        <div class="foods-freq-list">
+          @for (food of monthlyData().distinct_foods.slice(0, 5); track food) {
+          <div class="food-freq-row">
+            <span class="food-name">{{ food }}</span>
+            <span class="food-count">{{ monthlyData().food_frequencies[food] }}x</span>
+          </div>
+          }
+        </div>
+        } @else {
+        <p class="no-data-msg">No foods logged this month.</p>
+        }
+      </div>
+
+      <!-- Confidence Score Card -->
+      <div class="snapshot-card glass-card full-row-mobile">
+        <div class="card-inner-header">
+          <span class="small-emoji">🛡️</span>
+          <h5>Report Coverage</h5>
+        </div>
+        <div class="confidence-circle-block">
+          <div class="confidence-badge" [ngClass]="getConfidenceColorClass(monthlyData().confidence_score)">
+            {{ monthlyData().confidence_score }}%
+          </div>
+          <div class="confidence-text">
+            <span class="conf-title">Confidence Rating</span>
+            <p class="conf-desc">
+              Based on your logged meals relative to the standard 3-meals-per-day format. High coverage guarantees
+              hyper-accurate AI insights.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    }
+
+    <!-- Weekly Aggregations Section -->
+    @if (weeklyReports() && weeklyReports().length > 0) {
+    <h3 class="section-title">📅 Weekly Aggregations</h3>
+    <div class="weekly-history-grid">
+      @for (report of weeklyReports(); track report.week_index) {
+      <div class="week-card glass-card">
+        <div class="week-header">
+          <h4>Week {{ report.week_index }}</h4>
+          <span class="week-pill" [ngClass]="getGradeColorClass(report.weekly_average_nutrition.average_grade)">Grade:
+            {{ report.weekly_average_nutrition.average_grade }}</span>
+        </div>
+        <div class="week-stats">
+          <div class="stat-row">
+            <span class="label">Total meals:</span>
+            <span class="val">{{ report.total_meals_logged }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">Avg daily cals:</span>
+            <span class="val">{{ report.weekly_average_calories }} kcal</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">Macros (P/C/F):</span>
+            <span class="val">{{ report.weekly_average_nutrition.average_protein }}g / {{
+              report.weekly_average_nutrition.average_carbs }}g / {{ report.weekly_average_nutrition.average_fat
+              }}g</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">Confidence:</span>
+            <span class="val conf-label" [ngClass]="getConfidenceColorClass(report.confidence_score)">{{
+              report.confidence_score }}%</span>
+          </div>
+        </div>
+      </div>
+      }
+    </div>
+    }
+
+    <!-- Baseline Guidelines (Existing Cards) -->
+    <h3 class="section-title">📋 Baseline Health Guidelines</h3>
+    <div class="recommendation-grid">
+      @for (card of recommendations(); track card.title) {
+      <div class="recommendation-card glass-card">
+        <header class="card-header">
+          <span class="card-emoji">{{ card.emoji }}</span>
+          <h4>{{ card.title }}</h4>
+        </header>
+
+        <p class="card-description">{{ card.description }}</p>
+
+        <div class="card-tips">
+          <label>Recommended Actions:</label>
+          <ul>
+            @for (tip of card.tips; track tip) {
+            <li>
+              <span class="bullet-star">✨</span>
+              <span class="tip-text">{{ tip }}</span>
+            </li>
+            }
+          </ul>
+        </div>
+      </div>
+      }
+    </div>
+    }
+  </main>
+</div>

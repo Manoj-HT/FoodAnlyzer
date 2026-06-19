@@ -1,0 +1,71 @@
+# Implementation of code 
+
+Following feature are required
+
+## Monthly aggregation and snapshots
+- Currently each meal has been stired in meal_logs.json
+- On recommendation page load we need to display recommendations based on aggregated data of last month
+- To aggregate and consolidate month data first compute weekly
+- Weekly aggregation should not be saved anywhere, it will be calculated on the recommendation page load 
+- Weekly aggregation should contain:
+    - Average calorie per meal
+    - Total meals logged
+    - weekly average calories
+    - weekly average nutrion report:
+        - average protein
+        - average carbs
+        - average fat
+        - average grade
+    - Distinct foods consumed in the week
+    - Frequency of the distinct consumed foods 
+    - Average time of consumption of food at "morning", "afternoon", "evening", "night"
+    - confidence score: lower logged meals will result in lower confidence score, defines the coverage of logged meals over the total meals 
+- Once all the weeks where meal was logged in the current month are aggregated we proceed to consolidate all 4 (or lesser) weeks data to get the monthly data
+- Monthly data should contain:
+    - average calories per meal
+    - total meals logged
+    - monthly average calories
+    - monthly average nutrion report:
+        - average protein
+        - average carbs
+        - average fat
+        - average grade
+    - Distinct foods consumed in the month, sorted from the highest consumed to lowest consumed
+    - Frequency of the distinct consumed foods 
+    - Average time of consumption of food at "morning", "afternoon", "evening", "night"
+    - snapshot version
+    - last insight generated time
+    - insight version
+    - insights
+    - report cache: a copy of the current object data should be updated only when new insight is generated
+    - confidence score: aggregated from the individual weekly confidence scores (lower logged meals will result in lower confidence score, defines the coverage of logged meals over the total meals)
+    
+## Recommendation and insight generation
+- On recommendation page load we need to compute weekly and monthly aggregations
+- We need to first check for report cache and insights cache
+- If the report cache is same as the current object data then return the insights cache
+- If the report cache is different from the current object data then we need to recompute the insights via llm and then update :
+    - report cache: update the report cache to contain new report data
+    - insights: the new insights generated via llm
+    - last_insight_generated_time: timestamp
+    - insight_version: increment the version
+- To get insights we will write a structured prompt which should include:
+    - System role
+    - user mentioned previous health conditions
+    - monthly data which contains:
+        - average calories per meal
+        - total meals logged
+        - monthly average calories
+        - monthly average nutrion report:
+            - average protein
+            - average carbs
+            - average fat
+            - average grade
+        - Distinct foods consumed in the month, sorted from the highest consumed to lowest consumed
+        - Frequency of the distinct consumed foods 
+        - Average time of consumption of food at "morning", "afternoon", "evening", "night"
+        - confidence score
+        - previous insights
+    - explanation of each key
+    - expectation text of insights in the form of list of points
+- We need to display the insights in the form of list of points for that month in card structure 

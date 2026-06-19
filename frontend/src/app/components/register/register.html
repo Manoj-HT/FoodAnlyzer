@@ -1,0 +1,158 @@
+<div class="auth-container">
+  <div class="glass-card auth-card">
+    <div class="auth-header">
+      <div class="logo">
+        <span class="logo-icon">🥗</span>
+        <h2>FoodAnalyzer</h2>
+      </div>
+      @if (step() === 1) {
+        <p class="subtitle">Create your account to start analyzing</p>
+      } @else {
+        <p class="subtitle">Review and personalize your profile details</p>
+      }
+    </div>
+
+    <div class="auth-body">
+      @if (isLoading()) {
+        <div class="spinner-container">
+          <div class="spinner"></div>
+          <p>Processing request...</p>
+        </div>
+      } @else {
+        @if (step() === 1) {
+          <!-- STEP 1: Registration Form -->
+          <form (submit)="onSubmitRegister()" class="auth-form animate-fade-in">
+            <div class="form-group">
+              <label for="name">Full Name</label>
+              <div class="input-wrapper">
+                <span class="input-icon">👤</span>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  [(ngModel)]="name"
+                  placeholder="John Doe"
+                  required
+                  autocomplete="name"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="email">Email Address</label>
+              <div class="input-wrapper">
+                <span class="input-icon">📧</span>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  [(ngModel)]="email"
+                  placeholder="name@example.com"
+                  required
+                  autocomplete="email"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="password">Create Password</label>
+              <div class="input-wrapper">
+                <span class="input-icon">🔒</span>
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  [(ngModel)]="password"
+                  placeholder="••••••••"
+                  required
+                  autocomplete="new-password"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="bio">Tell us about yourself</label>
+              <div class="textarea-wrapper">
+                <textarea
+                  id="bio"
+                  name="bio"
+                  [(ngModel)]="bio"
+                  placeholder="E.g., I'm a 28-year-old software engineer. I run 3 times a week, love Mediterranean food, and want to track my protein intake..."
+                  rows="4"
+                  required
+                ></textarea>
+              </div>
+            </div>
+
+            @if (errorMessage()) {
+              <div class="error-badge">
+                <span class="error-icon">⚠️</span>
+                <span>{{ errorMessage() }}</span>
+              </div>
+            }
+
+            <button type="submit" class="btn btn-primary">
+              Register & Analyze
+              <span class="arrow">→</span>
+            </button>
+          </form>
+        } @else {
+          <!-- STEP 2: Details Verification Screen -->
+          <div class="details-confirmation animate-fade-in">
+            <div class="noted-section">
+              <h3 class="noted-heading">We noted these details about you. Do you want to confirm?</h3>
+              
+              <ul class="details-list">
+                @for (detail of userDetailsList(); track detail) {
+                  <li>
+                    <span class="bullet">✨</span>
+                    <span class="detail-text">{{ detail }}</span>
+                  </li>
+                } @empty {
+                  <li>No details extracted yet. Write a bio to get started.</li>
+                }
+              </ul>
+            </div>
+
+            <div class="form-group">
+              <label for="modifications">Any modifications?</label>
+              <div class="textarea-wrapper">
+                <textarea
+                  id="modifications"
+                  name="modifications"
+                  [(ngModel)]="modifications"
+                  [placeholder]="placeholderText()"
+                  rows="3"
+                ></textarea>
+              </div>
+            </div>
+
+            @if (errorMessage()) {
+              <div class="error-badge">
+                <span class="error-icon">⚠️</span>
+                <span>{{ errorMessage() }}</span>
+              </div>
+            }
+
+            <div class="action-footer">
+              <button type="button" class="btn btn-primary w-full" (click)="onActionStep2()">
+                @if (modifications().trim() !== '') {
+                  Update Profile Details
+                } @else {
+                  Confirm & Go to Dashboard
+                }
+                <span class="arrow">→</span>
+              </button>
+            </div>
+          </div>
+        }
+      }
+    </div>
+
+    @if (step() === 1) {
+      <div class="auth-footer">
+        <p>Already have an account? <a (click)="goToLogin()" class="auth-link">Sign In</a></p>
+      </div>
+    }
+  </div>
+</div>

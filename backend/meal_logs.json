@@ -1847,6 +1847,80 @@
                 "fat": 4,
                 "grade": "A"
             }
+        },
+        {
+            "id": "1781923212352",
+            "description": "2 plates of idly and sambhar",
+            "time": "2026-06-19T09:30",
+            "report": {
+                "calories": 342,
+                "protein": 16,
+                "carbs": 59,
+                "fat": 2,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "1781923243288",
+            "description": "3 pizza",
+            "time": "2026-06-19T20:00",
+            "report": {
+                "calories": 714,
+                "protein": 18,
+                "carbs": 96,
+                "fat": 24,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "1781927591790",
+            "description": "2 masala dosas",
+            "time": "2026-06-20T09:30",
+            "report": {
+                "calories": 368,
+                "protein": 10,
+                "carbs": 60,
+                "fat": 8,
+                "grade": "B"
+            }
+        },
+        {
+            "id": "1781932870131",
+            "description": "idly and sambhar",
+            "time": "2026-06-20T10:50",
+            "report": {
+                "calories": 214,
+                "protein": 10,
+                "carbs": 35,
+                "fat": 2,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "1781932924361",
+            "description": "dosa",
+            "time": "2026-06-20T12:00",
+            "report": {
+                "calories": 184,
+                "protein": 5,
+                "carbs": 30,
+                "fat": 4,
+                "grade": "B"
+            }
+        }
+    ],
+    "2d972de1-a82a-4994-be61-6287502dffc2": [
+        {
+            "id": "1781927656522",
+            "description": "2 masala dosas",
+            "time": "2026-06-20T09:30",
+            "report": {
+                "calories": 368,
+                "protein": 10,
+                "carbs": 60,
+                "fat": 8,
+                "grade": "B"
+            }
         }
     ]
 }

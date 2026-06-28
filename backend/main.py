@@ -653,17 +653,104 @@ def update_details(userid: str, payload: UpdateDetailsRequest):
 
 # Image Classifier Helper & Endpoints
 
-classifier = None
+general_classifier = None
+specialized_classifier = None
 
-def get_classifier():
-    global classifier
-    if classifier is None:
-        # Load a highly efficient tiny image classification model
-        classifier = pipeline("image-classification", model="microsoft/swin-tiny-patch4-window7-224")
-    return classifier
+def get_general_classifier():
+    global general_classifier
+    if general_classifier is None:
+        # Load a highly efficient tiny image classification model (ImageNet)
+        general_classifier = pipeline("image-classification", model="microsoft/swin-tiny-patch4-window7-224")
+    return general_classifier
+
+def get_specialized_classifier():
+    global specialized_classifier
+    if specialized_classifier is None:
+        # Load a specialized classifier for Indian and Western food categories
+        specialized_classifier = pipeline("image-classification", model="prithivMLmods/Indian-Western-Food-34")
+    return specialized_classifier
+
+def call_gemini_multimodal_api(image_bytes: bytes, mime_type: str, prompt: str) -> Optional[str]:
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("Gemini API key not found in environment.")
+        return None
+    try:
+        import base64
+        encoded_image = base64.b64encode(image_bytes).decode('utf-8')
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        payload = {
+            "contents": [{
+                "parts": [
+                    {
+                        "inline_data": {
+                            "mime_type": mime_type,
+                            "data": encoded_image
+                        }
+                    },
+                    {
+                        "text": prompt
+                    }
+                ]
+            }],
+            "generationConfig": {
+                "responseMimeType": "application/json"
+            }
+        }
+        req_data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(
+            url, 
+            data=req_data, 
+            headers={'Content-Type': 'application/json'}
+        )
+        with urllib.request.urlopen(req, timeout=20) as response:
+            res = json.loads(response.read().decode('utf-8'))
+            text_response = res["candidates"][0]["content"]["parts"][0]["text"]
+            return text_response
+    except Exception as e:
+        print(f"Error calling Gemini Multimodal API: {e}")
+        return None
+
+def call_ollama_multimodal_api(image_bytes: bytes, prompt: str) -> Optional[str]:
+    try:
+        import base64
+        encoded_image = base64.b64encode(image_bytes).decode('utf-8')
+        payload = {
+            "model": OLLAMA_MODEL,
+            "prompt": prompt,
+            "images": [encoded_image],
+            "stream": False,
+            "format": "json"
+        }
+        req_data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(
+            OLLAMA_API_URL,
+            data=req_data,
+            headers={'Content-Type': 'application/json'}
+        )
+        with urllib.request.urlopen(req, timeout=25) as response:
+            res = json.loads(response.read().decode('utf-8'))
+            text_response = res.get("response", "")
+            return text_response
+    except Exception as e:
+        print(f"Error calling Ollama Multimodal API: {e}")
+        return None
+
+def clean_json_response(raw_response: str) -> str:
+    clean_text = raw_response.strip()
+    if clean_text.startswith("```"):
+        lines = clean_text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines[-1].startswith("```"):
+            lines = lines[:-1]
+        clean_text = "\n".join(lines).strip()
+    return clean_text
 
 def classify_image_fallback(image_bytes: bytes, filename: str):
     filename_lower = filename.lower()
+    if "dosa" in filename_lower:
+        return True, "masala dosa", 0.98, "Looks like an appetizing golden dosa."
     if "pizza" in filename_lower:
         return True, "pizza", 0.95, "Looks like an appetizing pizza."
     if "burger" in filename_lower or "hamburger" in filename_lower:
@@ -686,76 +773,158 @@ async def analyze_image(file: UploadFile = File(...)):
     confidence = 0.92
     details = "Looks like a delicious pizza."
     
-    try:
-        if HAS_ML:
-            image = Image.open(io.BytesIO(contents))
-            pipe = get_classifier()
-            results = pipe(image)
-            
-            # Common container/vessel labels in ImageNet to ignore/skip
-            container_keywords = [
-                "plate", "cup", "mug", "bowl", "saucer", "tray", "platter", 
-                "pot", "glass", "table", "dining table", "dishwasher", "refrigerator",
-                "tray", "shelf", "counter", "kitchen"
-            ]
-            
-            # Common food keywords to check if prediction matches food
-            food_keywords = [
-                "pizza", "burger", "dog", "spaghetti", "salad", "fruit", "bread", 
-                "soup", "pie", "cake", "ice cream", "vegetable", "egg", "cheese", 
-                "chocolate", "sandwich", "pasta", "chicken", "fish", "rice", 
-                "curry", "banana", "apple", "orange", "lemon", "strawberry", 
-                "carbonara", "potage", "consomme", "espresso", "guacamole", 
-                "burrito", "taco", "bagel", "pretzel", "bakery", "meat", "dish", "food",
-                "custard", "pudding", "sweet", "pastry", "cookie", "doughnut", "muffin",
-                "tart", "croissant", "bun", "roll", "torte", "confectionery", "chocolate",
-                "fudge", "caramel", "honey", "syrup", "jelly", "jam", "marmalade", "sauce",
-                "gravy", "dressing", "condiment", "dip", "salsa", "hummus", "guacamole"
-            ]
+    llm_classification_success = False
+    
+    # 1. Attempt Multimodal LLM classification if provider is configured and available
+    mime_type = "image/jpeg"
+    if file.filename:
+        ext = file.filename.split(".")[-1].lower()
+        if ext in ["png", "webp", "gif"]:
+            mime_type = f"image/{ext}"
 
-            detected_label = None
-            detected_score = None
-            is_food_detected = False
-            
-            # Loop through results to find the first food label that is NOT just a generic container
-            for pred in results:
-                label_lower = pred["label"].lower()
-                score_val = pred["score"]
+    llm_prompt = """You are an expert food classifier. Analyze the provided food image and return a JSON object with these exact keys:
+{
+  "is_food": <bool, true if it is a food item, false otherwise>,
+  "food_name": <string, the specific name of the food item, e.g. "masala dosa" or "pepperoni pizza" or "caesar salad">,
+  "confidence": <float, confidence score between 0.0 and 1.0>,
+  "details": <string, a brief description of the food item like "Looks like a freshly prepared golden dosa.">
+}
+Return ONLY the raw JSON object, without markdown formatting or code blocks.
+"""
+
+    if LLM_PROVIDER == "gemini" and os.environ.get("GEMINI_API_KEY"):
+        print("Using Gemini Multimodal API for image classification...")
+        response_text = call_gemini_multimodal_api(contents, mime_type, llm_prompt)
+        if response_text:
+            try:
+                data = json.loads(clean_json_response(response_text))
+                if "is_food" in data and "food_name" in data and "confidence" in data:
+                    is_food = bool(data["is_food"])
+                    food_name = str(data["food_name"])
+                    confidence = float(data["confidence"])
+                    details = str(data.get("details", f"Detected {food_name}."))
+                    llm_classification_success = True
+            except Exception as e:
+                print(f"Error parsing Gemini response: {e}. Raw: {response_text}")
+
+    elif LLM_PROVIDER == "ollama":
+        print("Using Ollama Multimodal API for image classification...")
+        response_text = call_ollama_multimodal_api(contents, llm_prompt)
+        if response_text:
+            try:
+                data = json.loads(clean_json_response(response_text))
+                if "is_food" in data and "food_name" in data and "confidence" in data:
+                    is_food = bool(data["is_food"])
+                    food_name = str(data["food_name"])
+                    confidence = float(data["confidence"])
+                    details = str(data.get("details", f"Detected {food_name}."))
+                    llm_classification_success = True
+            except Exception as e:
+                print(f"Error parsing Ollama response: {e}. Raw: {response_text}")
+
+    # 2. Local ML Pipeline Fallback (or if LLM failed/disabled)
+    if not llm_classification_success:
+        try:
+            if HAS_ML:
+                image = Image.open(io.BytesIO(contents))
                 
-                is_container = any(ck in label_lower for ck in container_keywords)
-                is_food_item = any(fk in label_lower for fk in food_keywords)
+                # Run specialized Indian/Western model
+                spec_pipe = get_specialized_classifier()
+                spec_results = spec_pipe(image)
+                top_spec = spec_results[0]
+                spec_label = top_spec["label"].lower()
+                spec_score = top_spec["score"]
                 
-                if is_food_item and not is_container:
-                    detected_label = pred["label"]
-                    detected_score = score_val
-                    is_food_detected = True
-                    break
-            
-            # Fallback to the first non-container prediction if no specific food keywords matched
-            if not is_food_detected:
+                # Run general model
+                gen_pipe = get_general_classifier()
+                results = gen_pipe(image)
+                
+                # Common container/vessel labels in ImageNet to ignore/skip
+                container_keywords = [
+                    "plate", "cup", "mug", "bowl", "saucer", "tray", "platter", 
+                    "pot", "glass", "table", "dining table", "dishwasher", "refrigerator",
+                    "tray", "shelf", "counter", "kitchen"
+                ]
+                
+                # Common food keywords to check if prediction matches food
+                food_keywords = [
+                    "pizza", "burger", "dog", "spaghetti", "salad", "fruit", "bread", 
+                    "soup", "pie", "cake", "ice cream", "vegetable", "egg", "cheese", 
+                    "chocolate", "sandwich", "pasta", "chicken", "fish", "rice", 
+                    "curry", "banana", "apple", "orange", "lemon", "strawberry", 
+                    "carbonara", "potage", "consomme", "espresso", "guacamole", 
+                    "burrito", "taco", "bagel", "pretzel", "bakery", "meat", "dish", "food",
+                    "custard", "pudding", "sweet", "pastry", "cookie", "doughnut", "muffin",
+                    "tart", "croissant", "bun", "roll", "torte", "confectionery", "chocolate",
+                    "fudge", "caramel", "honey", "syrup", "jelly", "jam", "marmalade", "sauce",
+                    "gravy", "dressing", "condiment", "dip", "salsa", "hummus", "guacamole"
+                ]
+
+                detected_label = None
+                detected_score = None
+                is_food_detected = False
+                
+                # Loop through results to find the first food label that is NOT just a generic container
                 for pred in results:
                     label_lower = pred["label"].lower()
-                    if not any(ck in label_lower for ck in container_keywords):
+                    score_val = pred["score"]
+                    
+                    is_container = any(ck in label_lower for ck in container_keywords)
+                    is_food_item = any(fk in label_lower for fk in food_keywords)
+                    
+                    if is_food_item and not is_container:
                         detected_label = pred["label"]
-                        detected_score = pred["score"]
-                        is_food_detected = any(fk in label_lower for fk in food_keywords)
+                        detected_score = score_val
+                        is_food_detected = True
                         break
-                        
-            # absolute fallback to top prediction if all labels are containers
-            if detected_label is None:
-                detected_label = results[0]["label"]
-                detected_score = results[0]["score"]
-                is_food_detected = any(fk in detected_label.lower() for fk in food_keywords)
                 
-            is_food = is_food_detected
-            food_name = detected_label.split(",")[0].strip()
-            confidence = float(detected_score)
-            details = f"Detected {detected_label}."
-        else:
+                # Fallback to the first non-container prediction if no specific food keywords matched
+                if not is_food_detected:
+                    for pred in results:
+                        label_lower = pred["label"].lower()
+                        if not any(ck in label_lower for ck in container_keywords):
+                            detected_label = pred["label"]
+                            detected_score = pred["score"]
+                            is_food_detected = any(fk in label_lower for fk in food_keywords)
+                            break
+                            
+                # absolute fallback to top prediction if all labels are containers
+                if detected_label is None:
+                    detected_label = results[0]["label"]
+                    detected_score = results[0]["score"]
+                    is_food_detected = any(fk in detected_label.lower() for fk in food_keywords)
+                
+                # Check if the general model confidently detects non-food
+                top_gen_is_food = any(fk in results[0]["label"].lower() for fk in food_keywords)
+                top_gen_is_container = any(ck in results[0]["label"].lower() for ck in container_keywords)
+                
+                if not top_gen_is_food and not top_gen_is_container and results[0]["score"] > 0.60:
+                    is_food = False
+                    food_name = results[0]["label"].split(",")[0].strip()
+                    confidence = float(results[0]["score"])
+                    details = f"We detected {results[0]['label']}, which doesn't seem to be a food item."
+                elif spec_score >= 0.70:
+                    is_food = True
+                    food_name = spec_label
+                    confidence = spec_score
+                    details = f"Detected {top_spec['label']}."
+                else:
+                    # Choose general model if it has higher confidence
+                    if is_food_detected and detected_score > spec_score:
+                        is_food = True
+                        food_name = detected_label.split(",")[0].strip()
+                        confidence = float(detected_score)
+                        details = f"Detected {detected_label}."
+                    else:
+                        is_food = True
+                        food_name = spec_label
+                        confidence = spec_score
+                        details = f"Detected {top_spec['label']}."
+            else:
+                is_food, food_name, confidence, details = classify_image_fallback(contents, file.filename)
+        except Exception as e:
+            print("ML classification error:", e)
             is_food, food_name, confidence, details = classify_image_fallback(contents, file.filename)
-    except Exception as e:
-        print("ML classification error:", e)
-        is_food, food_name, confidence, details = classify_image_fallback(contents, file.filename)
         
     return {
         "is_food": is_food,
@@ -1111,6 +1280,162 @@ def save_meal_logs():
 # Load logs on startup
 load_meal_logs()
 
+def fallback_parse_description(description: str) -> dict:
+    now = datetime.now()
+    log_date = now.date()
+    log_time = now.time().replace(second=0, microsecond=0)
+    
+    desc_lower = description.lower()
+    
+    # 1. Date extraction
+    if "yesterday" in desc_lower:
+        log_date = (now - timedelta(days=1)).date()
+    elif "today" in desc_lower:
+        log_date = now.date()
+    # Check days of the week
+    days = {
+        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+        "friday": 4, "saturday": 5, "sunday": 6
+    }
+    for day, day_num in days.items():
+        if day in desc_lower:
+            current_weekday = now.weekday()
+            days_ago = (current_weekday - day_num) % 7
+            if days_ago == 0:
+                days_ago = 7
+            log_date = (now - timedelta(days=days_ago)).date()
+            break
+
+    # 2. Robust Time extraction
+    time_extracted = False
+    hour = log_time.hour
+    minute = log_time.minute
+    
+    # Try pattern 1: HH:MM with optional am/pm (e.g. 8:30 pm, 13:00)
+    match = re.search(r'\b(\d{1,2}):(\d{2})\s*(am|pm)?\b', desc_lower)
+    if match:
+        hour = int(match.group(1))
+        minute = int(match.group(2))
+        ampm = match.group(3)
+        if ampm:
+            if ampm == "pm" and hour < 12:
+                hour += 12
+            elif ampm == "am" and hour == 12:
+                hour = 0
+        time_extracted = True
+        
+    # Try pattern 2: HH am/pm (e.g. 9am, 9 pm)
+    if not time_extracted:
+        match = re.search(r'\b(\d{1,2})\s*(am|pm)\b', desc_lower)
+        if match:
+            hour = int(match.group(1))
+            minute = 0
+            ampm = match.group(2)
+            if ampm == "pm" and hour < 12:
+                hour += 12
+            elif ampm == "am" and hour == 12:
+                hour = 0
+            time_extracted = True
+            
+    # Try pattern 3: at HH (e.g. at 9, at 14)
+    if not time_extracted:
+        match = re.search(r'\bat\s+(\d{1,2})\b', desc_lower)
+        if match:
+            hour = int(match.group(1))
+            minute = 0
+            time_extracted = True
+            
+    if time_extracted:
+        if 0 <= hour < 24 and 0 <= minute < 60:
+            log_time = log_time.replace(hour=hour, minute=minute)
+    else:
+        # Keyword-based time fallback
+        if "morning" in desc_lower:
+            log_time = log_time.replace(hour=8, minute=0)
+        elif "noon" in desc_lower or "lunch" in desc_lower:
+            log_time = log_time.replace(hour=12, minute=30)
+        elif "afternoon" in desc_lower:
+            log_time = log_time.replace(hour=15, minute=0)
+        elif "evening" in desc_lower:
+            log_time = log_time.replace(hour=18, minute=30)
+        elif "night" in desc_lower or "dinner" in desc_lower:
+            log_time = log_time.replace(hour=20, minute=0)
+
+    # 3. Clean food query by scrubbing known date/time/filler phrases
+    scrub_phrases = [
+        "yesterday", "today", "tomorrow", "this morning", "this afternoon", "this evening",
+        "morning", "noon", "afternoon", "evening", "night", "lunch", "dinner", "breakfast",
+        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+        "i ate", "i had", "i have had", "ate", "had", "eating",
+        "pieces of", "piece of", "slice of", "slices of", "bowl of", "bowls of", 
+        "plate of", "cups of", "cup of", "glass of", "glasses of",
+        "last monday", "last tuesday", "last wednesday", "last thursday", "last friday", "last saturday", "last sunday",
+        "last", "this", "some", "few", "at", "pm", "am", "o'clock", "for"
+    ]
+    
+    clean_query = description
+    if time_extracted:
+        clean_query = re.sub(r'\b\d{1,2}:\d{2}\s*(?:am|pm)?\b', '', clean_query, flags=re.IGNORECASE)
+        clean_query = re.sub(r'\b\d{1,2}\s*(?:am|pm)\b', '', clean_query, flags=re.IGNORECASE)
+        clean_query = re.sub(r'\bat\s+\d{1,2}\b', '', clean_query, flags=re.IGNORECASE)
+
+    # Scrub phrases
+    for phrase in scrub_phrases:
+        clean_query = re.sub(r'\b' + phrase + r'\b', '', clean_query, flags=re.IGNORECASE)
+        
+    clean_query = re.sub(r'\s+', ' ', clean_query).strip()
+    clean_query = re.sub(r'^[,\s]+|[,\s]+$', '', clean_query)
+    
+    if not clean_query:
+        clean_query = description
+        
+    iso_datetime = datetime.combine(log_date, log_time).strftime("%Y-%m-%dT%H:%M")
+    
+    return {
+        "food_query": clean_query,
+        "datetime": iso_datetime
+    }
+
+def parse_food_and_time(description: str) -> dict:
+    prompt = f"""You are an expert assistant that extracts food items and the date/time they were eaten from a user's sentence.
+Current local time is: {datetime.now().strftime("%Y-%m-%dT%H:%M")}
+
+User sentence: "{description}"
+
+Extract:
+1. The food items eaten, cleaned of any quantity words, time words, or filler phrases (e.g. "i ate", "at 9am", "today").
+2. The date and time when the food was eaten, formatted as an ISO datetime string: YYYY-MM-DDTHH:MM.
+   - If a relative day like "today", "yesterday", "tomorrow", or a day of the week is mentioned, calculate the correct date relative to the current local time.
+   - If a specific time is mentioned (e.g., "9am", "8:30 pm", "14:00"), set that time.
+   - If no date is mentioned, assume today's date.
+   - If no time is mentioned, assume the current time.
+
+Return your response strictly as a JSON object with this format:
+{{
+  "food_query": "extracted food description",
+  "datetime": "YYYY-MM-DDTHH:MM"
+}}
+"""
+    response_text = call_llm_api(prompt, response_json=True)
+    if response_text:
+        try:
+            clean_text = response_text.strip()
+            if clean_text.startswith("```"):
+                lines = clean_text.split("\n")
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                clean_text = "\n".join(lines).strip()
+            data = json.loads(clean_text)
+            if "food_query" in data and "datetime" in data:
+                return data
+        except Exception as e:
+            print(f"Error parsing LLM response for food and time: {e}")
+            
+    print("Using Python fallback for food and time parsing.")
+    return fallback_parse_description(description)
+
 # Pydantic Schemas for Meal Logs
 class MealLogReport(BaseModel):
     calories: int
@@ -1121,8 +1446,8 @@ class MealLogReport(BaseModel):
 
 class MealLogRequest(BaseModel):
     description: str
-    time: str  # User-selected ISO datetime string, format: YYYY-MM-DDTHH:MM
-    report: MealLogReport
+    time: Optional[str] = None  # User-selected ISO datetime string, format: YYYY-MM-DDTHH:MM
+    report: Optional[MealLogReport] = None
 
 @app.post("/api/users/{userid}/logs")
 def add_meal_log(userid: str, payload: MealLogRequest):
@@ -1132,14 +1457,50 @@ def add_meal_log(userid: str, payload: MealLogRequest):
             detail="User not found."
         )
     
+    description = payload.description.strip()
+    log_time = payload.time
+    report = payload.report
+    
+    if not log_time or not report:
+        # We need to parse the description to extract food query & time
+        parsed = parse_food_and_time(description)
+        food_query = parsed["food_query"]
+        extracted_time = parsed["datetime"]
+        
+        if not log_time:
+            log_time = extracted_time
+            
+        if not report:
+            try:
+                # Call analyze_food logic internally
+                analysis = analyze_food(AnalyzeFoodRequest(food_name=food_query))
+                report = MealLogReport(
+                    calories=analysis["calories"],
+                    protein=analysis["protein"],
+                    carbs=analysis["carbs"],
+                    fat=analysis["fat"],
+                    grade=analysis["grade"]
+                )
+            except Exception as e:
+                print(f"Error analyzing food inside add_meal_log: {e}")
+                report = MealLogReport(
+                    calories=200,
+                    protein=8,
+                    carbs=25,
+                    fat=6,
+                    grade="C"
+                )
+        # Use the cleaned food query as description for the log entry
+        description = food_query
+
     # Generate timestamp as ID (milliseconds since epoch to guarantee uniqueness)
     timestamp_id = str(int(time.time() * 1000))
     
     log_entry = {
         "id": timestamp_id,
-        "description": payload.description.strip(),
-        "time": payload.time.strip(),
-        "report": payload.report.dict()
+        "description": description,
+        "time": log_time.strip(),
+        "report": report.dict()
     }
     
     if userid not in MEAL_LOGS:

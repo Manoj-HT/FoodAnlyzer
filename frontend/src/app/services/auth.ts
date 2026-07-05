@@ -94,8 +94,9 @@ export class AuthService {
     return this.http.post<any>(`${this.apiUrl}/users/${userid}/inferred-logs/feedback`, payload);
   }
 
-  getRecommendations(userid: string): Observable<any> {
-    return this.http.get<any>(`${this.apiUrl}/users/${userid}/recommendations`);
+  getRecommendations(userid: string, regenerate?: boolean): Observable<any> {
+    const queryParam = regenerate ? '?regenerate=true' : '';
+    return this.http.get<any>(`${this.apiUrl}/users/${userid}/recommendations${queryParam}`);
   }
 
   transcribeAudio(file: File | Blob): Observable<{ text: string }> {
@@ -104,8 +105,9 @@ export class AuthService {
     return this.http.post<{ text: string }>(`${this.apiUrl}/users/transcribe`, formData);
   }
 
-  getRecommendationsStreamUrl(userid: string): string {
-    return `${this.apiUrl}/users/${userid}/recommendations/stream`;
+  getRecommendationsStreamUrl(userid: string, regenerate?: boolean): string {
+    const queryParam = regenerate ? '?regenerate=true' : '';
+    return `${this.apiUrl}/users/${userid}/recommendations/stream${queryParam}`;
   }
 
   // LocalStorage Helpers

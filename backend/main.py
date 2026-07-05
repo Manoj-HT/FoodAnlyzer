@@ -2239,7 +2239,7 @@ def generate_fallback_insights(user: UserInDB, report_data: dict) -> list:
 
 
 @app.get("/api/users/{userid}/recommendations")
-def get_user_recommendations(userid: str):
+def get_user_recommendations(userid: str, regenerate: bool = False):
     print("get_user_recommendations called for user:", userid)
     if userid not in USERS_BY_ID:
         raise HTTPException(
@@ -2262,7 +2262,7 @@ def get_user_recommendations(userid: str):
     if not hasattr(user, 'insight_version'):
         user.insight_version = 0
         
-    if user.report_cache == current_report_data and user.insights:
+    if user.report_cache == current_report_data and user.insights and not regenerate:
         insights = user.insights
         last_gen_time = user.last_insight_generated_time
         version = user.insight_version
@@ -2292,7 +2292,7 @@ def get_user_recommendations(userid: str):
     }
 
 
-def stream_recommendations_generator(userid: str):
+def stream_recommendations_generator(userid: str, regenerate: bool = False):
     user = USERS_BY_ID.get(userid)
     if not user:
         yield json.dumps({"type": "error", "detail": "User not found"}) + "\n"
@@ -2312,7 +2312,7 @@ def stream_recommendations_generator(userid: str):
     current_report_data, weekly_reports = get_user_recommendations_data(userid)
 
     # 2. Check if cached
-    is_cached = (user.report_cache == current_report_data and len(user.insights) > 0)
+    is_cached = (user.report_cache == current_report_data and len(user.insights) > 0 and not regenerate)
 
     if is_cached:
         meta = {
@@ -2496,7 +2496,7 @@ Example output format:
 
 
 @app.get("/api/users/{userid}/recommendations/stream")
-def get_user_recommendations_stream(userid: str):
+def get_user_recommendations_stream(userid: str, regenerate: bool = False):
     if userid not in USERS_BY_ID:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -2504,7 +2504,7 @@ def get_user_recommendations_stream(userid: str):
         )
     from fastapi.responses import StreamingResponse
     return StreamingResponse(
-        stream_recommendations_generator(userid),
+        stream_recommendations_generator(userid, regenerate),
         media_type="application/x-ndjson"
     )
 

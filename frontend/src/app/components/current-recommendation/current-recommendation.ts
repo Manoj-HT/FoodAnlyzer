@@ -55,9 +55,9 @@ export class CurrentRecommendationComponent implements OnInit {
     }
   }
 
-  async fetchRecommendationsStream(userid: string): Promise<void> {
+  async fetchRecommendationsStream(userid: string, regenerate: boolean = false): Promise<void> {
     try {
-      const url = this.authService.getRecommendationsStreamUrl(userid);
+      const url = this.authService.getRecommendationsStreamUrl(userid, regenerate);
       const response = await fetch(url);
 
       if (!response.body) {
@@ -91,7 +91,7 @@ export class CurrentRecommendationComponent implements OnInit {
     } catch (err) {
       console.warn('Streaming failed or timed out. Falling back to static HTTP load:', err);
       // Fallback: Fetch via normal JSON API
-      this.authService.getRecommendations(userid).subscribe({
+      this.authService.getRecommendations(userid, regenerate).subscribe({
         next: (data) => {
           this.monthlyData.set(data.monthly_data);
           this.weeklyReports.set(data.weekly_reports || []);
@@ -324,5 +324,16 @@ export class CurrentRecommendationComponent implements OnInit {
 
     this.wellnessGoals.set(goals);
     this.recommendations.set(cards);
+  }
+
+  regenerateInsights(): void {
+    const userid = this.authService.getUserId();
+    if (!userid) return;
+
+    this.isGenerating.set(true);
+    this.streamText.set('');
+    
+    // Call the stream generation with force regenerate option
+    this.fetchRecommendationsStream(userid, true);
   }
 }

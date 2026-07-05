@@ -38,7 +38,12 @@
             </div>
           </div>
         </div>
-        <span class="gen-time">Last compiled: {{ formatDate(monthlyData().last_insight_generated_time) }}</span>
+        <div class="header-right">
+          <span class="gen-time">Last compiled: {{ formatDate(monthlyData().last_insight_generated_time) }}</span>
+          <button class="btn-regenerate" (click)="regenerateInsights()" [disabled]="isGenerating()">
+            🔄 Regenerate
+          </button>
+        </div>
       </header>
 
       <div class="insights-content-body">

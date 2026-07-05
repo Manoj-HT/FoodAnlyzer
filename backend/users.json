@@ -7,40 +7,40 @@
         "confirmed": true,
         "token": "tok_4f2577f139764663",
         "report_cache": {
-            "average_calories_per_meal": 282.6,
-            "total_meals_logged": 59,
-            "monthly_average_calories": 595.5,
+            "average_calories_per_meal": 273.7,
+            "total_meals_logged": 45,
+            "monthly_average_calories": 439.9,
             "monthly_average_nutrition": {
-                "average_protein": 26.5,
-                "average_carbs": 72.0,
-                "average_fat": 20.4,
+                "average_protein": 20.2,
+                "average_carbs": 58.1,
+                "average_fat": 13.3,
                 "average_grade": "A"
             },
             "distinct_foods": [
-                "paneer butter masala",
-                "idli sambar",
-                "veg biryani",
-                "greek yogurt",
-                "fruit salad",
                 "dal rice",
-                "avocado toast",
+                "idli sambar",
+                "fruit salad",
                 "roti sabzi",
-                "chicken biryani",
                 "pasta",
-                "protein shake",
-                "sushi",
                 "oatmeal",
+                "veg biryani",
                 "grilled chicken",
+                "paneer butter masala",
                 "burger",
+                "greek yogurt",
+                "avocado toast",
+                "protein shake",
+                "chicken biryani",
                 "2 plates of idly and sambhar",
                 "3 pizza",
                 "2 masala dosas",
                 "idly and sambhar",
                 "dosa",
-                "masala dosa",
-                "fried rice",
+                "sushi",
                 "sandwich",
-                "pizza"
+                "pizza",
+                "masala dosa",
+                "fried rice"
             ],
             "food_frequencies": {
                 "2 plates of idly and sambhar": 1,
@@ -48,54 +48,54 @@
                 "2 masala dosas": 1,
                 "idly and sambhar": 1,
                 "dosa": 1,
-                "idli sambar": 4,
-                "veg biryani": 4,
-                "greek yogurt": 4,
-                "masala dosa": 1,
-                "protein shake": 2,
-                "fruit salad": 4,
-                "fried rice": 1,
-                "chicken biryani": 3,
-                "dal rice": 4,
-                "avocado toast": 4,
-                "roti sabzi": 4,
-                "paneer butter masala": 6,
-                "pasta": 3,
-                "sushi": 2,
+                "pasta": 2,
+                "sushi": 1,
                 "oatmeal": 2,
+                "veg biryani": 2,
                 "grilled chicken": 2,
+                "dal rice": 4,
+                "paneer butter masala": 2,
                 "sandwich": 1,
                 "burger": 2,
-                "pizza": 1
+                "pizza": 1,
+                "idli sambar": 4,
+                "greek yogurt": 2,
+                "fruit salad": 4,
+                "roti sabzi": 3,
+                "avocado toast": 2,
+                "masala dosa": 1,
+                "protein shake": 2,
+                "fried rice": 1,
+                "chicken biryani": 2
             },
             "time_of_consumption": {
                 "morning": {
-                    "count": 24,
+                    "count": 18,
                     "avg_time": "09:01 AM"
                 },
                 "afternoon": {
-                    "count": 22,
-                    "avg_time": "02:07 PM"
+                    "count": 17,
+                    "avg_time": "02:00 PM"
                 },
                 "evening": {
                     "count": 1,
                     "avg_time": "08:00 PM"
                 },
                 "night": {
-                    "count": 12,
-                    "avg_time": "03:06 AM"
+                    "count": 9,
+                    "avg_time": "03:17 AM"
                 }
             },
-            "confidence_score": 60.7
+            "confidence_score": 48.8
         },
         "insights": [
-            "Your logging confidence is moderate (60.7%). Consistency is key to unlocking deep nutritional insights.",
-            "Nice job managing your energy intake. You are averaging 595.5 kcal/day, which aligns well with a fat loss deficit.",
-            "Over 20% of your meals are logged late at night. Late-night digestion can disrupt sleep quality and metabolic health. Try eating heavier meals earlier.",
-            "Your average monthly meal grade is 'A'. Keep making high-quality whole food selections!"
+            "Your logging confidence is moderate (48.8%). Consistency is key to unlocking deep nutritional insights.",
+            "Nice job managing your energy intake. You are averaging 439.9 kcal/day, which aligns well with a fat loss deficit.",
+            "Your average monthly meal grade is 'A'. Keep making high-quality whole food selections!",
+            "Good dietary variety! You consumed 24 distinct food items this month, keeping your gut microbiome diverse."
         ],
-        "last_insight_generated_time": "2026-06-25T08:30:09.948564",
-        "insight_version": 5,
+        "last_insight_generated_time": "2026-06-29T21:51:07.515866",
+        "insight_version": 6,
         "structured_details": {
             "current_details": {
                 "age": 5,

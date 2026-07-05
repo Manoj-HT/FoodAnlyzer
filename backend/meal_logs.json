@@ -1907,6 +1907,18 @@
                 "fat": 4,
                 "grade": "B"
             }
+        },
+        {
+            "id": "1782750251015",
+            "description": "idli sambar",
+            "time": "2026-06-29T08:36",
+            "report": {
+                "calories": 128,
+                "protein": 6,
+                "carbs": 24,
+                "fat": 0,
+                "grade": "A"
+            }
         }
     ],
     "2d972de1-a82a-4994-be61-6287502dffc2": [
@@ -1919,6 +1931,272 @@
                 "protein": 10,
                 "carbs": 60,
                 "fat": 8,
+                "grade": "B"
+            }
+        }
+    ],
+    "test_user_123": [
+        {
+            "id": "hist_20",
+            "description": "Oats",
+            "time": "2026-05-30T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_19",
+            "description": "Oats",
+            "time": "2026-05-31T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_18",
+            "description": "Oats",
+            "time": "2026-06-01T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_17",
+            "description": "Oats",
+            "time": "2026-06-02T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_16",
+            "description": "Oats",
+            "time": "2026-06-03T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_15",
+            "description": "Oats",
+            "time": "2026-06-04T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_14",
+            "description": "Oats",
+            "time": "2026-06-05T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_13",
+            "description": "Oats",
+            "time": "2026-06-06T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_12",
+            "description": "Oats",
+            "time": "2026-06-07T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_11",
+            "description": "Oats",
+            "time": "2026-06-08T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_10",
+            "description": "Oats",
+            "time": "2026-06-09T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_9",
+            "description": "Oats",
+            "time": "2026-06-10T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_8",
+            "description": "Oats",
+            "time": "2026-06-11T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_7",
+            "description": "Oats",
+            "time": "2026-06-12T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_6",
+            "description": "Oats",
+            "time": "2026-06-13T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_5",
+            "description": "Oats",
+            "time": "2026-06-14T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_4",
+            "description": "Oats",
+            "time": "2026-06-15T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_3",
+            "description": "Oats",
+            "time": "2026-06-16T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_2",
+            "description": "Oats",
+            "time": "2026-06-17T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_1",
+            "description": "Oats",
+            "time": "2026-06-18T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "hist_0",
+            "description": "Oats",
+            "time": "2026-06-19T09:00:40.259466",
+            "report": {
+                "calories": 150,
+                "protein": 5,
+                "carbs": 27,
+                "fat": 3,
+                "grade": "A"
+            }
+        },
+        {
+            "id": "1782749982708",
+            "description": "Oats",
+            "time": "2026-06-29T09:00",
+            "report": {
+                "calories": 45,
+                "protein": 0,
+                "carbs": 5,
+                "fat": 2,
                 "grade": "B"
             }
         }

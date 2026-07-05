@@ -7,6 +7,8 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
+import { forkJoin } from 'rxjs';
 import { AuthService } from '../../services/auth';
 import { NavigationComponent } from '../navigation/navigation';
 import { ModalComponent } from '../../utilities/components/modal/modal';
@@ -15,13 +17,15 @@ interface MealLog {
   id: string;
   description: string;
   time: string;
-  report: {
+  report?: {
     calories: number;
     protein: number;
     carbs: number;
     fat: number;
     grade: string;
   };
+  isInferred?: boolean;
+  timePeriod?: string;
 }
 
 interface DayColumn {
@@ -46,14 +50,25 @@ interface DayColumn {
 })
 export class YourLogsComponent implements OnInit {
   private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
 
   logs = signal<MealLog[]>([]);
+  inferredLogs = signal<MealLog[]>([]);
+  lowData = signal(false);
   isLoading = signal(true);
   errorMsg = signal('');
 
   // Selected log for the detail modal
   selectedLog = signal<MealLog | null>(null);
   isDetailModalOpen = signal(false);
+
+  // Selected log for the inferred detail modal
+  selectedInferredLog = signal<MealLog | null>(null);
+  isInferredModalOpen = signal(false);
+  inferredDate = signal('');
+  inferredPeriod = signal('');
+  isFeedbackRecorded = signal(false);
+  isSubmittingFeedback = signal(false);
 
   // How many weeks we are offset from the current week (0 = current week, 1 = 1 week ago, etc.)
   weekOffset = signal<number>(0);
@@ -101,6 +116,25 @@ export class YourLogsComponent implements OnInit {
         }
       });
 
+      // Merge inferred meals if not low data
+      if (!this.lowData()) {
+        const dayInferred = this.inferredLogs().filter((log) => log.time.split('T')[0] === dateString);
+        dayInferred.forEach((log) => {
+          const timePart = log.time.split('T')[1] || '';
+          const hour = parseInt(timePart.split(':')[0] || '0', 10);
+
+          if (hour >= 5 && hour < 12) {
+            if (morning.length === 0) morning.push(log);
+          } else if (hour >= 12 && hour < 17) {
+            if (noon.length === 0) noon.push(log);
+          } else if (hour >= 17 && hour < 21) {
+            if (evening.length === 0) evening.push(log);
+          } else {
+            if (lateNight.length === 0) lateNight.push(log);
+          }
+        });
+      }
+
       columns.push({
         dateLabel,
         dayName,
@@ -131,9 +165,14 @@ export class YourLogsComponent implements OnInit {
     const userid = this.authService.getUserId();
     if (userid) {
       this.isLoading.set(true);
-      this.authService.getMealLogs(userid, this.weekOffset()).subscribe({
-        next: (data) => {
-          this.logs.set(data);
+      forkJoin({
+        actual: this.authService.getMealLogs(userid, this.weekOffset()),
+        inferred: this.authService.getInferredLogs(userid, this.weekOffset())
+      }).subscribe({
+        next: (res) => {
+          this.logs.set(res.actual);
+          this.inferredLogs.set(res.inferred.inferred_logs || []);
+          this.lowData.set(res.inferred.low_data || false);
           this.isLoading.set(false);
         },
         error: (err) => {
@@ -164,9 +203,80 @@ export class YourLogsComponent implements OnInit {
     this.loadLogs();
   }
 
-  openDetailModal(log: MealLog): void {
-    this.selectedLog.set(log);
-    this.isDetailModalOpen.set(true);
+  openDetailModal(log: MealLog, dateString?: string, timePeriod?: string): void {
+    if (log.isInferred) {
+      this.selectedInferredLog.set(log);
+      this.inferredDate.set(dateString || log.time.split('T')[0]);
+      this.inferredPeriod.set(timePeriod || log.timePeriod || '');
+      this.isFeedbackRecorded.set(false);
+      this.isInferredModalOpen.set(true);
+    } else {
+      this.selectedLog.set(log);
+      this.isDetailModalOpen.set(true);
+    }
+  }
+
+  onFeedbackYes(): void {
+    const userid = this.authService.getUserId();
+    const log = this.selectedInferredLog();
+    if (!userid || !log) return;
+
+    this.isSubmittingFeedback.set(true);
+    this.authService.submitInferredFeedback(userid, {
+      date: this.inferredDate(),
+      time_period: this.inferredPeriod(),
+      description: log.description,
+      feedback: 'yes',
+      time: log.time
+    }).subscribe({
+      next: () => {
+        this.isSubmittingFeedback.set(false);
+        this.isInferredModalOpen.set(false);
+        this.loadLogs();
+      },
+      error: (err) => {
+        console.error('Failed to submit feedback yes:', err);
+        this.isSubmittingFeedback.set(false);
+      }
+    });
+  }
+
+  onFeedbackNo(): void {
+    const userid = this.authService.getUserId();
+    const log = this.selectedInferredLog();
+    if (!userid || !log) return;
+
+    this.isSubmittingFeedback.set(true);
+    this.authService.submitInferredFeedback(userid, {
+      date: this.inferredDate(),
+      time_period: this.inferredPeriod(),
+      description: log.description,
+      feedback: 'no',
+      time: log.time
+    }).subscribe({
+      next: () => {
+        this.isSubmittingFeedback.set(false);
+        this.isFeedbackRecorded.set(true);
+        this.loadLogs();
+      },
+      error: (err) => {
+        console.error('Failed to submit feedback no:', err);
+        this.isSubmittingFeedback.set(false);
+      }
+    });
+  }
+
+  onFeedbackAdd(): void {
+    const log = this.selectedInferredLog();
+    if (!log) return;
+
+    this.isInferredModalOpen.set(false);
+    this.router.navigate(['/dashboard'], {
+      queryParams: {
+        food: log.description,
+        time: log.time
+      }
+    });
   }
 
   formatTime(isoString: string): string {

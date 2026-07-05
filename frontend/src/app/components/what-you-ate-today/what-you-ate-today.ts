@@ -8,7 +8,7 @@ import {
   ViewChild,
   ElementRef,
 } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService, User } from '../../services/auth';
 import { MediaPreviewService, MediaPreviewItem } from '../../services/media-preview';
@@ -35,6 +35,7 @@ interface MealBreakdown {
 export class WhatYouAteTodayComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly mediaPreviewService = inject(MediaPreviewService);
 
   userName = signal('Member');
@@ -64,6 +65,7 @@ export class WhatYouAteTodayComponent implements OnInit {
   isSuccessModalOpen = signal(false);
   isAudioTranscribing = signal(false);
   logDateTime = signal('');
+  preselectedTime = signal('');
   isAnalyzing = signal(false);
   showResult = signal(false);
   mealBreakdown = signal<MealBreakdown | null>(null);
@@ -107,6 +109,16 @@ export class WhatYouAteTodayComponent implements OnInit {
         },
       });
     }
+
+    // Read query params for pre-populating food input and time
+    this.route.queryParams.subscribe(params => {
+      if (params['food']) {
+        this.foodInput.set(params['food']);
+      }
+      if (params['time']) {
+        this.preselectedTime.set(params['time']);
+      }
+    });
   }
 
   openDetailsModal(): void {
@@ -594,14 +606,18 @@ export class WhatYouAteTodayComponent implements OnInit {
   }
 
   openLogModal(): void {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
+    if (this.preselectedTime()) {
+      this.logDateTime.set(this.preselectedTime());
+    } else {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
 
-    this.logDateTime.set(`${year}-${month}-${day}T${hours}:${minutes}`);
+      this.logDateTime.set(`${year}-${month}-${day}T${hours}:${minutes}`);
+    }
     this.isLogModalOpen.set(true);
   }
 
@@ -637,6 +653,7 @@ export class WhatYouAteTodayComponent implements OnInit {
         this.previewItems().forEach((item) => URL.revokeObjectURL(item.blobUrl));
         this.previewItems.set([]);
         this.foodInput.set('');
+        this.preselectedTime.set('');
         this.showResult.set(false);
         this.mealBreakdown.set(null);
         this.selectedImageName.set('');

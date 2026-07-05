@@ -1280,6 +1280,32 @@ def save_meal_logs():
 # Load logs on startup
 load_meal_logs()
 
+NEGATIVE_PREDICTIONS_FILE = os.path.join(os.path.dirname(__file__), "negative_predictions.json")
+NEGATIVE_PREDICTIONS: Dict[str, list] = {}
+
+def load_negative_predictions():
+    global NEGATIVE_PREDICTIONS
+    if not os.path.exists(NEGATIVE_PREDICTIONS_FILE):
+        NEGATIVE_PREDICTIONS = {}
+        return
+    try:
+        with open(NEGATIVE_PREDICTIONS_FILE, "r") as f:
+            NEGATIVE_PREDICTIONS = json.load(f)
+    except Exception as e:
+        print(f"Error loading negative predictions: {e}")
+        NEGATIVE_PREDICTIONS = {}
+
+def save_negative_predictions():
+    try:
+        with open(NEGATIVE_PREDICTIONS_FILE, "w") as f:
+            json.dump(NEGATIVE_PREDICTIONS, f, indent=4)
+    except Exception as e:
+        print(f"Error saving negative predictions: {e}")
+
+# Load negative predictions on startup
+load_negative_predictions()
+
+
 def fallback_parse_description(description: str) -> dict:
     now = datetime.now()
     log_date = now.date()
@@ -1547,6 +1573,268 @@ def get_meal_logs(userid: str, week_offset: int = 0):
     filtered_logs.sort(key=lambda x: x["time"], reverse=True)
     
     return filtered_logs
+
+
+class InferredFeedbackRequest(BaseModel):
+    date: str
+    time_period: str
+    description: str
+    feedback: str
+    time: str
+
+def get_period_name(hour: int) -> str:
+    if 5 <= hour < 12:
+        return "morning"
+    elif 12 <= hour < 17:
+        return "noon"
+    elif 17 <= hour < 21:
+        return "evening"
+    else:
+        return "lateNight"
+
+@app.get("/api/users/{userid}/inferred-logs")
+def get_inferred_logs(userid: str, week_offset: int = 0):
+    if userid not in USERS_BY_ID:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found."
+        )
+        
+    logs = MEAL_LOGS.get(userid, [])
+    
+    # 1. Check if user has sufficient history (at least 21 logs total)
+    if len(logs) < 21:
+        return {"inferred_logs": [], "low_data": True}
+        
+    # 2. Determine active week start/end dates
+    now = datetime.now()
+    end_of_today = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    start_date = end_of_today - timedelta(days=(week_offset + 1) * 7)
+    end_date = end_of_today - timedelta(days=week_offset * 7)
+    
+    # 3. Generate the 7 days of the active week (newest to oldest)
+    # (Matches the frontend display where i=0 is today/latest, i=6 is oldest)
+    dates_of_week = []
+    for i in range(7):
+        d_obj = (end_date - timedelta(days=i)).date()
+        dates_of_week.append(d_obj.isoformat())
+        
+    # 4. Map of actual logs during this week
+    actual_slots = set()
+    for log in logs:
+        try:
+            log_dt = datetime.fromisoformat(log["time"])
+            if start_date < log_dt <= end_date:
+                p = get_period_name(log_dt.hour)
+                actual_slots.add((log_dt.date().isoformat(), p))
+        except Exception:
+            pass
+            
+    # 5. Extract historical logs (not in active week)
+    historical_logs = []
+    for log in logs:
+        try:
+            log_dt = datetime.fromisoformat(log["time"])
+            if not (start_date < log_dt <= end_date):
+                historical_logs.append(log)
+        except Exception:
+            pass
+            
+    # 6. Group history for frequencies
+    from collections import Counter
+    history_by_weekday_period = {}
+    history_by_period = {}
+    
+    for log in historical_logs:
+        try:
+            log_dt = datetime.fromisoformat(log["time"])
+            p = get_period_name(log_dt.hour)
+            w = log_dt.weekday()
+            desc = log["description"].strip()
+            if not desc:
+                continue
+                
+            # By weekday and period
+            if (w, p) not in history_by_weekday_period:
+                history_by_weekday_period[(w, p)] = []
+            history_by_weekday_period[(w, p)].append(desc)
+            
+            # By period only
+            if p not in history_by_period:
+                history_by_period[p] = []
+            history_by_period[p].append(desc)
+        except Exception:
+            pass
+            
+    # 7. Get user's negative predictions set
+    user_negatives = NEGATIVE_PREDICTIONS.get(userid, [])
+    rejected_set = {
+        (item.get("date"), item.get("time_period"), item.get("description", "").lower().strip())
+        for item in user_negatives
+    }
+    
+    inferred_logs = []
+    
+    # 8. Run inference for empty slots
+    periods = ["morning", "noon", "evening", "lateNight"]
+    default_times = {
+        "morning": "09:00",
+        "noon": "13:00",
+        "evening": "19:30",
+        "lateNight": "23:00"
+    }
+    
+    for date_str in dates_of_week:
+        for p in periods:
+            if (date_str, p) in actual_slots:
+                continue
+                
+            d_obj = datetime.fromisoformat(date_str)
+            w = d_obj.weekday()
+            
+            candidate = None
+            
+            # Tier 1: Day of week + Period matching
+            candidates_tier1 = history_by_weekday_period.get((w, p), [])
+            if candidates_tier1:
+                # Count and sort by count descending
+                counts = Counter(candidates_tier1).most_common()
+                for food, _ in counts:
+                    if (date_str, p, food.lower().strip()) not in rejected_set:
+                        candidate = food
+                        break
+                        
+            # Tier 2: Period matching
+            if not candidate:
+                candidates_tier2 = history_by_period.get(p, [])
+                if candidates_tier2:
+                    counts = Counter(candidates_tier2).most_common()
+                    for food, _ in counts:
+                        if (date_str, p, food.lower().strip()) not in rejected_set:
+                            candidate = food
+                            break
+                            
+            if candidate:
+                # Calculate average time of consumption for this candidate in this period
+                matching_times = []
+                for log in historical_logs:
+                    try:
+                        log_dt = datetime.fromisoformat(log["time"])
+                        if log["description"].lower().strip() == candidate.lower().strip() and get_period_name(log_dt.hour) == p:
+                            matching_times.append(log_dt.hour * 60 + log_dt.minute)
+                    except Exception:
+                        pass
+                
+                if matching_times:
+                    avg_mins = int(sum(matching_times) / len(matching_times))
+                    h_pred = avg_mins // 60
+                    m_pred = avg_mins % 60
+                    predicted_time = f"{h_pred:02d}:{m_pred:02d}"
+                else:
+                    predicted_time = default_times[p]
+                    
+                inferred_logs.append({
+                    "id": f"inf_{date_str}_{p}",
+                    "description": candidate,
+                    "time": f"{date_str}T{predicted_time}",
+                    "isInferred": True,
+                    "timePeriod": p
+                })
+                
+    return {"inferred_logs": inferred_logs, "low_data": False}
+
+@app.post("/api/users/{userid}/inferred-logs/feedback")
+def inferred_feedback(userid: str, payload: InferredFeedbackRequest):
+    if userid not in USERS_BY_ID:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found."
+        )
+        
+    feedback = payload.feedback.lower().strip()
+    
+    if feedback == "no":
+        # Add to negative predictions
+        if userid not in NEGATIVE_PREDICTIONS:
+            NEGATIVE_PREDICTIONS[userid] = []
+            
+        # Avoid duplicate negative predictions
+        exists = any(
+            item.get("date") == payload.date and
+            item.get("time_period") == payload.time_period and
+            item.get("description", "").lower().strip() == payload.description.lower().strip()
+            for item in NEGATIVE_PREDICTIONS[userid]
+        )
+        if not exists:
+            NEGATIVE_PREDICTIONS[userid].append({
+                "date": payload.date,
+                "time_period": payload.time_period,
+                "description": payload.description
+            })
+            save_negative_predictions()
+            
+        return {"status": "success"}
+        
+    elif feedback == "yes":
+        # Delete negative prediction if it was just added
+        if userid in NEGATIVE_PREDICTIONS:
+            NEGATIVE_PREDICTIONS[userid] = [
+                item for item in NEGATIVE_PREDICTIONS[userid]
+                if not (
+                    item.get("date") == payload.date and
+                    item.get("time_period") == payload.time_period and
+                    item.get("description", "").lower().strip() == payload.description.lower().strip()
+                )
+            ]
+            save_negative_predictions()
+            
+        # Log the actual meal
+        try:
+            analysis = analyze_food(AnalyzeFoodRequest(food_name=payload.description))
+            report = MealLogReport(
+                calories=analysis["calories"],
+                protein=analysis["protein"],
+                carbs=analysis["carbs"],
+                fat=analysis["fat"],
+                grade=analysis["grade"]
+            )
+        except Exception as e:
+            print(f"Error analyzing food inside feedback: {e}")
+            report = MealLogReport(
+                calories=200,
+                protein=8,
+                carbs=25,
+                fat=6,
+                grade="C"
+            )
+            
+        timestamp_id = str(int(time.time() * 1000))
+        
+        log_entry = {
+            "id": timestamp_id,
+            "description": payload.description,
+            "time": payload.time,
+            "report": report.dict()
+        }
+        
+        if userid not in MEAL_LOGS:
+            MEAL_LOGS[userid] = []
+            
+        MEAL_LOGS[userid].append(log_entry)
+        MEAL_LOGS[userid].sort(key=lambda x: x["time"])
+        save_meal_logs()
+        
+        return {"status": "success", "log": log_entry}
+        
+    elif feedback == "add":
+        return {"status": "success"}
+        
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid feedback type. Must be 'yes', 'no', or 'add'."
+        )
+
 
 
 # ========================================================

@@ -80,6 +80,20 @@ export class AuthService {
     return this.http.get<any[]>(`${this.apiUrl}/users/${userid}/logs?week_offset=${weekOffset}`);
   }
 
+  getInferredLogs(userid: string, weekOffset: number = 0): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/users/${userid}/inferred-logs?week_offset=${weekOffset}`);
+  }
+
+  submitInferredFeedback(userid: string, payload: {
+    date: string;
+    time_period: string;
+    description: string;
+    feedback: string;
+    time: string;
+  }): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/users/${userid}/inferred-logs/feedback`, payload);
+  }
+
   getRecommendations(userid: string): Observable<any> {
     return this.http.get<any>(`${this.apiUrl}/users/${userid}/recommendations`);
   }

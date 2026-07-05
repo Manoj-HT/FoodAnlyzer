@@ -25,6 +25,13 @@
       </div>
     </div>
 
+    @if (lowData()) {
+      <div class="low-data-warning-chip">
+        <span class="warning-icon">⚠️</span>
+        <span>Severely low data detected to infer your meals</span>
+      </div>
+    }
+
     @if (isLoading()) {
       <div class="loader-container">
         <div class="spinner"></div>
@@ -51,9 +58,16 @@
                   <div class="section-title">🌅 Morning <span class="time-range">(5 AM - 12 PM)</span></div>
                   <div class="section-meals">
                     @for (meal of column.sections.morning; track meal.id) {
-                      <button class="meal-clickable-item" (click)="openDetailModal(meal)">
+                      <button 
+                        [class.meal-clickable-item]="true"
+                        [class.inferred-meal]="meal.isInferred"
+                        (click)="openDetailModal(meal, column.dateString, 'morning')"
+                      >
                         <span class="meal-name">{{ meal.description }}</span>
                         <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                        @if (meal.isInferred) {
+                          <span class="inferred-tag">Inferred</span>
+                        }
                       </button>
                     } @empty {
                       <span class="no-meals">No meals logged</span>
@@ -66,9 +80,16 @@
                   <div class="section-title">☀️ Noon <span class="time-range">(12 PM - 5 PM)</span></div>
                   <div class="section-meals">
                     @for (meal of column.sections.noon; track meal.id) {
-                      <button class="meal-clickable-item" (click)="openDetailModal(meal)">
+                      <button 
+                        [class.meal-clickable-item]="true"
+                        [class.inferred-meal]="meal.isInferred"
+                        (click)="openDetailModal(meal, column.dateString, 'noon')"
+                      >
                         <span class="meal-name">{{ meal.description }}</span>
                         <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                        @if (meal.isInferred) {
+                          <span class="inferred-tag">Inferred</span>
+                        }
                       </button>
                     } @empty {
                       <span class="no-meals">No meals logged</span>
@@ -81,9 +102,16 @@
                   <div class="section-title">🌇 Evening <span class="time-range">(5 PM - 9 PM)</span></div>
                   <div class="section-meals">
                     @for (meal of column.sections.evening; track meal.id) {
-                      <button class="meal-clickable-item" (click)="openDetailModal(meal)">
+                      <button 
+                        [class.meal-clickable-item]="true"
+                        [class.inferred-meal]="meal.isInferred"
+                        (click)="openDetailModal(meal, column.dateString, 'evening')"
+                      >
                         <span class="meal-name">{{ meal.description }}</span>
                         <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                        @if (meal.isInferred) {
+                          <span class="inferred-tag">Inferred</span>
+                        }
                       </button>
                     } @empty {
                       <span class="no-meals">No meals logged</span>
@@ -96,9 +124,16 @@
                   <div class="section-title">🌙 Late Night <span class="time-range">(9 PM - 5 AM)</span></div>
                   <div class="section-meals">
                     @for (meal of column.sections.lateNight; track meal.id) {
-                      <button class="meal-clickable-item" (click)="openDetailModal(meal)">
+                      <button 
+                        [class.meal-clickable-item]="true"
+                        [class.inferred-meal]="meal.isInferred"
+                        (click)="openDetailModal(meal, column.dateString, 'lateNight')"
+                      >
                         <span class="meal-name">{{ meal.description }}</span>
                         <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                        @if (meal.isInferred) {
+                          <span class="inferred-tag">Inferred</span>
+                        }
                       </button>
                     } @empty {
                       <span class="no-meals">No meals logged</span>
@@ -134,19 +169,19 @@
           <label>Nutritional Breakdown</label>
           <div class="detail-macros-grid">
             <div class="detail-macro calories">
-              <span class="macro-value">{{ selectedLog()!.report.calories }}</span>
+              <span class="macro-value">{{ selectedLog()!.report?.calories }}</span>
               <span class="macro-label">Calories (kcal)</span>
             </div>
             <div class="detail-macro protein">
-              <span class="macro-value">{{ selectedLog()!.report.protein }}g</span>
+              <span class="macro-value">{{ selectedLog()!.report?.protein }}g</span>
               <span class="macro-label">Protein</span>
             </div>
             <div class="detail-macro carbs">
-              <span class="macro-value">{{ selectedLog()!.report.carbs }}g</span>
+              <span class="macro-value">{{ selectedLog()!.report?.carbs }}g</span>
               <span class="macro-label">Carbs</span>
             </div>
             <div class="detail-macro fat">
-              <span class="macro-value">{{ selectedLog()!.report.fat }}g</span>
+              <span class="macro-value">{{ selectedLog()!.report?.fat }}g</span>
               <span class="macro-label">Fat</span>
             </div>
           </div>
@@ -155,8 +190,8 @@
         <div class="detail-row grade-row">
           <label>Nutrition Grade</label>
           <div class="detail-grade-container">
-            <div class="detail-grade-badge" [attr.data-grade]="selectedLog()!.report.grade">
-              Grade {{ selectedLog()!.report.grade }}
+            <div class="detail-grade-badge" [attr.data-grade]="selectedLog()!.report?.grade">
+              Grade {{ selectedLog()!.report?.grade }}
             </div>
           </div>
         </div>
@@ -167,4 +202,61 @@
       <button type="button" class="btn btn-confirm" (click)="isDetailModalOpen.set(false)">Close</button>
     </div>
   </app-modal>
+
+  <!-- Inferred Meal Feedback Modal -->
+  <app-modal 
+    [(isOpen)]="isInferredModalOpen" 
+    [title]="'Inferred Meal Suggestion'"
+  >
+    @if (selectedInferredLog()) {
+      <div body class="inferred-feedback-modal-body">
+        <p class="suggestion-intro">We think you might have had:</p>
+        <div class="suggestion-detail">
+          <h3>{{ selectedInferredLog()!.description }}</h3>
+          <p>On <strong>{{ inferredDate() }}</strong> in the <strong>{{ inferredPeriod() }}</strong> period at approximately <strong>{{ formatTime(selectedInferredLog()!.time) }}</strong>.</p>
+        </div>
+
+        @if (isFeedbackRecorded()) {
+          <div class="feedback-recorded-message">
+            Your response has been recorded.
+          </div>
+        }
+      </div>
+    }
+
+    <div footer class="inferred-feedback-modal-footer">
+      <button 
+        type="button" 
+        class="btn btn-confirm btn-yes" 
+        [disabled]="isSubmittingFeedback()" 
+        (click)="onFeedbackYes()"
+      >
+        Yes
+      </button>
+      <button 
+        type="button" 
+        class="btn btn-cancel btn-no" 
+        [disabled]="isSubmittingFeedback() || isFeedbackRecorded()" 
+        (click)="onFeedbackNo()"
+      >
+        No
+      </button>
+      <button 
+        type="button" 
+        class="btn btn-info btn-add" 
+        [disabled]="isSubmittingFeedback()" 
+        (click)="onFeedbackAdd()"
+      >
+        Add Meal
+      </button>
+      <button 
+        type="button" 
+        class="btn btn-cancel btn-close" 
+        (click)="isInferredModalOpen.set(false)"
+      >
+        Close
+      </button>
+    </div>
+  </app-modal>
 </div>
+

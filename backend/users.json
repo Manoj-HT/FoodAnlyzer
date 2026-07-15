@@ -1,11 +1,36 @@
 {
-    "8f28d2aa-d968-42d9-8a35-0ff3a3cf9800": {
-        "id": "8f28d2aa-d968-42d9-8a35-0ff3a3cf9800",
+    "ddf8ebc9-b6b9-4612-8b2e-f2c33a5e6d65": {
+        "id": "ddf8ebc9-b6b9-4612-8b2e-f2c33a5e6d65",
         "name": "manu",
         "email": "manu@example.com",
         "password": "123456",
         "confirmed": true,
-        "token": "tok_4f2577f139764663",
+        "token": "tok_4ac2c04f4c5d4bdc",
+        "report_cache": {},
+        "insights": [],
+        "last_insight_generated_time": "",
+        "insight_version": 0,
+        "structured_details": {
+            "current_details": {
+                "age": 5,
+                "height": null,
+                "weight": "86 kg"
+            },
+            "health_history_and_ailments": [
+                "Lactose sensitivity / Dairy-free preferences"
+            ],
+            "goals": [
+                "Calorie deficit and weight management"
+            ]
+        }
+    },
+    "808e9230-83df-4b7e-80da-c62a32370e40": {
+        "id": "808e9230-83df-4b7e-80da-c62a32370e40",
+        "name": "Jane Doe",
+        "email": "jane@example.com",
+        "password": "123456",
+        "confirmed": true,
+        "token": "tok_7754e8e631804d87",
         "report_cache": {
             "average_calories_per_meal": 239.5,
             "total_meals_logged": 105,
@@ -57,48 +82,23 @@
             "confidence_score": 100.0
         },
         "insights": [
-            "Manu, your consistent tracking (100% confidence) is fantastic! You're successfully maintaining a calorie deficit with an average daily intake of 898.2 kcal \u2013 excellent work.",
-            "While your overall nutrition grade is \u2018A\u2019, let\u2019s address the late-night eating. Approximately 26 of your 105 meals are logged between 11:15 PM and 08:30 AM. This pattern of consuming heavier meals late at night can interfere with sleep and potentially impact your metabolism. Aim to shift the majority of your meals earlier in the day \u2013 particularly after 8:00 PM.",
-            "You frequently consume idli sambar, fruit salad, and roti sabzi (19 times each). These are all excellent, nutritionally dense choices, particularly beneficial due to your dairy-free preferences. Continue to prioritize these foods!",
-            "Given your height and weight, we can explore slightly increasing your protein intake. Aim for around 30-35g of protein per day. Incorporating protein-rich foods like lentils (included in dal rice), tofu, or chicken (if you\u2019re open to it) alongside your existing meals could significantly aid in satiety and muscle maintenance during a calorie deficit.",
-            "Consider diversifying your carbohydrate sources. While roti and oatmeal are beneficial, adding more vegetables to your meals, especially during the afternoon (when you log many meals), will help manage your blood sugar levels and provide essential micronutrients.  Explore adding vegetables to your pasta dishes or incorporating them into your sandwiches.",
-            "To ensure continued accuracy and optimization of your plan, we recommend logging *all* of your meals consistently. Even small omissions can impact the confidence score. Aim for a minimum of 12 meals logged per day, especially during the evenings when you tend to consume the most meals."
+            "Excellent tracking! With a confidence score of 100.0%, these recommendations are highly customized to your actual patterns.",
+            "Nice job managing your energy intake. You are averaging 898.2 kcal/day, which aligns well with a fat loss deficit.",
+            "Over 25% of your meals are logged late at night. Late-night digestion can disrupt sleep quality and metabolic health. Try eating heavier meals earlier.",
+            "Your average monthly meal grade is 'A'. Keep making high-quality whole food selections!"
         ],
-        "last_insight_generated_time": "2026-07-05T11:07:51.029987",
-        "insight_version": 4,
+        "last_insight_generated_time": "2026-07-05T14:17:06.887872",
+        "insight_version": 1,
         "structured_details": {
             "current_details": {
-                "age": 5,
+                "age": 29,
                 "height": "5'0\"",
-                "weight": "83 kg"
+                "weight": "65 kg"
             },
-            "health_history_and_ailments": [
-                "Lactose sensitivity / Dairy-free preferences"
-            ],
+            "health_history_and_ailments": null,
             "goals": [
                 "Calorie deficit and weight management"
             ]
-        }
-    },
-    "2d972de1-a82a-4994-be61-6287502dffc2": {
-        "id": "2d972de1-a82a-4994-be61-6287502dffc2",
-        "name": "Jane Doe",
-        "email": "jane@example.com",
-        "password": "password123",
-        "confirmed": true,
-        "token": "tok_0461849c083141d4",
-        "report_cache": {},
-        "insights": [],
-        "last_insight_generated_time": "",
-        "insight_version": 0,
-        "structured_details": {
-            "current_details": {
-                "age": null,
-                "height": null,
-                "weight": null
-            },
-            "health_history_and_ailments": null,
-            "goals": null
         }
     }
 }

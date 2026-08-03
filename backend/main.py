@@ -7,7 +7,7 @@ import time
 import re
 import urllib.request
 import urllib.parse
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Any
 from fastapi import FastAPI, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
@@ -24,9 +24,9 @@ except ImportError:
 # LLM CONFIGURATION FLAGS
 # ========================================================
 # Choose preferred provider: "gemini", "ollama", or "fallback"
-LLM_PROVIDER = "ollama"  # Set to "gemini" or "ollama" to use LLMs
-OLLAMA_MODEL = "gemma3:4b"
-OLLAMA_API_URL = "http://localhost:11434/api/generate"
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen1.5")
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generate")
 
 app = FastAPI(title="FoodAnalyzer API")
 
@@ -65,23 +65,9 @@ USERS_BY_ID: Dict[str, UserInDB] = {}
 DB_FILE = os.path.join(os.path.dirname(__file__), "users.json")
 
 def save_to_json():
-    data = {}
-    for uid, user in USERS_BY_ID.items():
-        data[uid] = {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "password": user.password,
-            "confirmed": user.confirmed,
-            "token": user.token,
-            "report_cache": getattr(user, 'report_cache', {}),
-            "insights": getattr(user, 'insights', []),
-            "last_insight_generated_time": getattr(user, 'last_insight_generated_time', ""),
-            "insight_version": getattr(user, 'insight_version', 0),
-            "structured_details": getattr(user, 'structured_details', {})
-        }
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+    # Stateless backend mode: User profiles and state are stored in client-side IndexedDB.
+    # Zero disk persistence on server.
+    pass
 
 def load_from_json():
     global USERS_BY_EMAIL, USERS_BY_ID
@@ -1271,11 +1257,8 @@ def load_meal_logs():
         MEAL_LOGS = {}
 
 def save_meal_logs():
-    try:
-        with open(MEAL_LOGS_FILE, "w") as f:
-            json.dump(MEAL_LOGS, f, indent=4)
-    except Exception as e:
-        print(f"Error saving meal logs: {e}")
+    # Stateless backend mode: Meal logs are stored in client IndexedDB.
+    pass
 
 # Load logs on startup
 load_meal_logs()
@@ -1296,11 +1279,8 @@ def load_negative_predictions():
         NEGATIVE_PREDICTIONS = {}
 
 def save_negative_predictions():
-    try:
-        with open(NEGATIVE_PREDICTIONS_FILE, "w") as f:
-            json.dump(NEGATIVE_PREDICTIONS, f, indent=4)
-    except Exception as e:
-        print(f"Error saving negative predictions: {e}")
+    # Stateless backend mode: Negative predictions stored in client IndexedDB.
+    pass
 
 # Load negative predictions on startup
 load_negative_predictions()
@@ -1758,7 +1738,6 @@ def inferred_feedback(userid: str, payload: InferredFeedbackRequest):
         if userid not in NEGATIVE_PREDICTIONS:
             NEGATIVE_PREDICTIONS[userid] = []
             
-        # Avoid duplicate negative predictions
         exists = any(
             item.get("date") == payload.date and
             item.get("time_period") == payload.time_period and
@@ -1796,44 +1775,125 @@ def inferred_feedback(userid: str, payload: InferredFeedbackRequest):
                 protein=analysis["protein"],
                 carbs=analysis["carbs"],
                 fat=analysis["fat"],
-                grade=analysis["grade"]
+                grade=analysis.get("grade", "B"),
+                tips=analysis.get("tips", [])
             )
+            add_meal_log(userid, MealLogRequest(
+                description=payload.description,
+                time=f"{payload.date}T12:00:00",
+                report=report
+            ))
         except Exception as e:
-            print(f"Error analyzing food inside feedback: {e}")
-            report = MealLogReport(
-                calories=200,
-                protein=8,
-                carbs=25,
-                fat=6,
-                grade="C"
-            )
+            print(f"Error logging inferred meal accept: {e}")
             
-        timestamp_id = str(int(time.time() * 1000))
-        
-        log_entry = {
-            "id": timestamp_id,
-            "description": payload.description,
-            "time": payload.time,
-            "report": report.dict()
-        }
-        
-        if userid not in MEAL_LOGS:
-            MEAL_LOGS[userid] = []
-            
-        MEAL_LOGS[userid].append(log_entry)
-        MEAL_LOGS[userid].sort(key=lambda x: x["time"])
-        save_meal_logs()
-        
-        return {"status": "success", "log": log_entry}
-        
-    elif feedback == "add":
         return {"status": "success"}
         
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid feedback type. Must be 'yes', 'no', or 'add'."
-        )
+    return {"status": "ignored"}
+
+
+class StatelessInferredRequest(BaseModel):
+    meal_logs: List[dict] = []
+    negative_predictions: List[str] = []
+    week_offset: int = 0
+
+@app.post("/api/inferred-meals")
+def post_stateless_inferred_meals(payload: StatelessInferredRequest):
+    logs = payload.meal_logs
+    if len(logs) < 5:
+        return {"inferred_logs": [], "low_data": True}
+
+    now = datetime.now()
+    end_of_today = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    start_date = end_of_today - timedelta(days=(payload.week_offset + 1) * 7)
+    end_date = end_of_today - timedelta(days=payload.week_offset * 7)
+
+    dates_of_week = [(end_date - timedelta(days=i)).date().isoformat() for i in range(7)]
+
+    actual_slots = set()
+    for log in logs:
+        try:
+            t_str = log.get("time") or log.get("date", "")
+            log_dt = datetime.fromisoformat(t_str)
+            if start_date < log_dt <= end_date:
+                p = get_period_name(log_dt.hour)
+                actual_slots.add((log_dt.date().isoformat(), p))
+        except Exception:
+            pass
+
+    historical_logs = []
+    for log in logs:
+        try:
+            t_str = log.get("time") or log.get("date", "")
+            log_dt = datetime.fromisoformat(t_str)
+            if not (start_date < log_dt <= end_date):
+                historical_logs.append(log)
+        except Exception:
+            pass
+
+    from collections import Counter
+    history_by_weekday_period = {}
+    history_by_period = {}
+
+    for log in historical_logs:
+        try:
+            t_str = log.get("time") or log.get("date", "")
+            log_dt = datetime.fromisoformat(t_str)
+            p = get_period_name(log_dt.hour)
+            w = log_dt.weekday()
+            desc = (log.get("food_item") or log.get("description", "")).strip()
+            if not desc:
+                continue
+
+            if (w, p) not in history_by_weekday_period:
+                history_by_weekday_period[(w, p)] = []
+            history_by_weekday_period[(w, p)].append(desc)
+
+            if p not in history_by_period:
+                history_by_period[p] = []
+            history_by_period[p].append(desc)
+        except Exception:
+            pass
+
+    rejected_set = {f.lower().strip() for f in payload.negative_predictions}
+    inferred_logs = []
+    periods = ["morning", "noon", "evening", "lateNight"]
+    default_times = {"morning": "09:00", "noon": "13:00", "evening": "19:30", "lateNight": "23:00"}
+
+    for date_str in dates_of_week:
+        for p in periods:
+            if (date_str, p) in actual_slots:
+                continue
+            d_obj = datetime.fromisoformat(date_str)
+            w = d_obj.weekday()
+            candidate = None
+
+            candidates_tier1 = history_by_weekday_period.get((w, p), [])
+            if candidates_tier1:
+                counts = Counter(candidates_tier1).most_common()
+                for food, _ in counts:
+                    if food.lower().strip() not in rejected_set:
+                        candidate = food
+                        break
+
+            if not candidate:
+                candidates_tier2 = history_by_period.get(p, [])
+                if candidates_tier2:
+                    counts = Counter(candidates_tier2).most_common()
+                    for food, _ in counts:
+                        if food.lower().strip() not in rejected_set:
+                            candidate = food
+                            break
+
+            if candidate:
+                inferred_logs.append({
+                    "id": f"inf_{date_str}_{p}",
+                    "description": candidate,
+                    "time": f"{date_str}T{default_times[p]}",
+                    "isInferred": True,
+                    "timePeriod": p
+                })
+
+    return {"inferred_logs": inferred_logs, "low_data": False}
 
 
 
@@ -1856,6 +1916,7 @@ def get_user_recommendations_data(userid: str):
         raise HTTPException(status_code=404, detail="User not found")
         
     logs = MEAL_LOGS.get(userid, [])
+    act_logs = ACTIVITY_LOGS.get(userid, [])
     now = datetime.now()
     
     # Normalize now to include all logs from today
@@ -1868,7 +1929,7 @@ def get_user_recommendations_data(userid: str):
         start_w = now - timedelta(days=(i+1)*7)
         week_ranges.append((start_w, end_w))
         
-    # Group logs by week (Week 1 = days 0-6 ago, Week 2 = days 7-13 ago, etc.)
+    # Group meal logs by week
     weekly_logs = [[] for _ in range(4)]
     for log in logs:
         try:
@@ -1879,6 +1940,18 @@ def get_user_recommendations_data(userid: str):
                     break
         except Exception:
             pass
+
+    # Group physical activity logs by week
+    weekly_act_logs = [[] for _ in range(4)]
+    for act in act_logs:
+        try:
+            act_dt = datetime.fromisoformat(act["time"])
+            for idx, (start_w, end_w) in enumerate(week_ranges):
+                if start_w < act_dt <= end_w:
+                    weekly_act_logs[idx].append(act)
+                    break
+        except Exception:
+            pass
             
     GRADE_MAP = {"A+": 95, "A": 85, "B": 75, "C+": 65, "C-": 55, "D": 45}
     
@@ -1886,39 +1959,51 @@ def get_user_recommendations_data(userid: str):
     weekly_confidences = []
     
     for idx, w_logs in enumerate(weekly_logs):
+        w_acts = weekly_act_logs[idx]
         total_w_meals = len(w_logs)
+        total_w_acts = len(w_acts)
+
         # Expected meals per week is 21 (3 meals * 7 days)
         w_confidence = min(100.0, (total_w_meals / 21.0) * 100.0)
         weekly_confidences.append(w_confidence)
         
-        if total_w_meals == 0:
-            continue
-            
-        total_w_cal = sum(log["report"]["calories"] for log in w_logs)
-        avg_w_cal_per_meal = total_w_cal / total_w_meals
+        total_w_cal = sum(log["report"]["calories"] for log in w_logs) if total_w_meals > 0 else 0
+        avg_w_cal_per_meal = (total_w_cal / total_w_meals) if total_w_meals > 0 else 0
         w_avg_cal = total_w_cal / 7.0
         
-        total_w_prot = sum(log["report"]["protein"] for log in w_logs)
-        total_w_carbs = sum(log["report"]["carbs"] for log in w_logs)
-        total_w_fat = sum(log["report"]["fat"] for log in w_logs)
+        total_w_prot = sum(log["report"]["protein"] for log in w_logs) if total_w_meals > 0 else 0
+        total_w_carbs = sum(log["report"]["carbs"] for log in w_logs) if total_w_meals > 0 else 0
+        total_w_fat = sum(log["report"]["fat"] for log in w_logs) if total_w_meals > 0 else 0
         
         w_avg_prot = total_w_prot / 7.0
         w_avg_carbs = total_w_carbs / 7.0
         w_avg_fat = total_w_fat / 7.0
         
-        avg_w_score = sum(GRADE_MAP.get(log["report"]["grade"], 75) for log in w_logs) / total_w_meals
-        if avg_w_score >= 90: w_grade = "A+"
-        elif avg_w_score >= 80: w_grade = "A"
-        elif avg_w_score >= 70: w_grade = "B"
-        elif avg_w_score >= 60: w_grade = "C+"
-        elif avg_w_score >= 50: w_grade = "C-"
-        else: w_grade = "D"
+        if total_w_meals > 0:
+            avg_w_score = sum(GRADE_MAP.get(log["report"]["grade"], 75) for log in w_logs) / total_w_meals
+            if avg_w_score >= 90: w_grade = "A+"
+            elif avg_w_score >= 80: w_grade = "A"
+            elif avg_w_score >= 70: w_grade = "B"
+            elif avg_w_score >= 60: w_grade = "C+"
+            elif avg_w_score >= 50: w_grade = "C-"
+            else: w_grade = "D"
+        else:
+            w_grade = "N/A"
         
         distinct_w_foods = list(set(log["description"].strip().lower() for log in w_logs))
         w_food_freqs = {}
         for log in w_logs:
             food = log["description"].strip().lower()
             w_food_freqs[food] = w_food_freqs.get(food, 0) + 1
+
+        # Activity aggregation for week
+        total_w_act_cals = sum(a.get("report", {}).get("calories_burned", 0) for a in w_acts)
+        total_w_act_duration = sum(a.get("report", {}).get("duration_minutes", 0) for a in w_acts)
+        w_avg_act_cals = total_w_act_cals / 7.0
+        w_act_freqs = {}
+        for a in w_acts:
+            t = a.get("report", {}).get("clean_title") or a.get("description", "Activity").strip()
+            w_act_freqs[t] = w_act_freqs.get(t, 0) + 1
             
         # Group time distribution
         m_times, a_times, e_times, n_times = [], [], [], []
@@ -1955,6 +2040,7 @@ def get_user_recommendations_data(userid: str):
             "average_calorie_per_meal": round(avg_w_cal_per_meal, 1),
             "total_meals_logged": total_w_meals,
             "weekly_average_calories": round(w_avg_cal, 1),
+            "weekly_average_calories_burned": round(w_avg_act_cals, 1),
             "weekly_average_nutrition": {
                 "average_protein": round(w_avg_prot, 1),
                 "average_carbs": round(w_avg_carbs, 1),
@@ -1963,6 +2049,9 @@ def get_user_recommendations_data(userid: str):
             },
             "distinct_foods": distinct_w_foods,
             "food_frequencies": w_food_freqs,
+            "total_activities_logged": total_w_acts,
+            "total_activity_duration_minutes": total_w_act_duration,
+            "activity_frequencies": w_act_freqs,
             "time_of_consumption": w_time_consumption,
             "confidence_score": round(w_confidence, 1)
         })
@@ -1970,44 +2059,28 @@ def get_user_recommendations_data(userid: str):
     all_month_logs = []
     for w_logs in weekly_logs:
         all_month_logs.extend(w_logs)
+
+    all_month_act_logs = []
+    for w_acts in weekly_act_logs:
+        all_month_act_logs.extend(w_acts)
         
     total_meals_month = len(all_month_logs)
+    total_acts_month = len(all_month_act_logs)
     monthly_confidence = sum(weekly_confidences) / 4.0
     
-    if total_meals_month == 0:
-        current_report_data = {
-            "average_calories_per_meal": 0.0,
-            "total_meals_logged": 0,
-            "monthly_average_calories": 0.0,
-            "monthly_average_nutrition": {
-                "average_protein": 0.0,
-                "average_carbs": 0.0,
-                "average_fat": 0.0,
-                "average_grade": "N/A"
-            },
-            "distinct_foods": [],
-            "food_frequencies": {},
-            "time_of_consumption": {
-                "morning": {"count": 0, "avg_time": "N/A"},
-                "afternoon": {"count": 0, "avg_time": "N/A"},
-                "evening": {"count": 0, "avg_time": "N/A"},
-                "night": {"count": 0, "avg_time": "N/A"}
-            },
-            "confidence_score": 0.0
-        }
-    else:
-        total_cal_month = sum(log["report"]["calories"] for log in all_month_logs)
-        avg_cal_per_meal_month = total_cal_month / total_meals_month
-        monthly_avg_cal = total_cal_month / 28.0
-        
-        total_prot_month = sum(log["report"]["protein"] for log in all_month_logs)
-        total_carbs_month = sum(log["report"]["carbs"] for log in all_month_logs)
-        total_fat_month = sum(log["report"]["fat"] for log in all_month_logs)
-        
-        monthly_avg_prot = total_prot_month / 28.0
-        monthly_avg_carbs = total_carbs_month / 28.0
-        monthly_avg_fat = total_fat_month / 28.0
-        
+    total_cal_month = sum(log["report"]["calories"] for log in all_month_logs) if total_meals_month > 0 else 0
+    avg_cal_per_meal_month = (total_cal_month / total_meals_month) if total_meals_month > 0 else 0
+    monthly_avg_cal = total_cal_month / 28.0
+    
+    total_prot_month = sum(log["report"]["protein"] for log in all_month_logs) if total_meals_month > 0 else 0
+    total_carbs_month = sum(log["report"]["carbs"] for log in all_month_logs) if total_meals_month > 0 else 0
+    total_fat_month = sum(log["report"]["fat"] for log in all_month_logs) if total_meals_month > 0 else 0
+    
+    monthly_avg_prot = total_prot_month / 28.0
+    monthly_avg_carbs = total_carbs_month / 28.0
+    monthly_avg_fat = total_fat_month / 28.0
+    
+    if total_meals_month > 0:
         avg_score_month = sum(GRADE_MAP.get(log["report"]["grade"], 75) for log in all_month_logs) / total_meals_month
         if avg_score_month >= 90: avg_grade_month = "A+"
         elif avg_score_month >= 80: avg_grade_month = "A"
@@ -2015,60 +2088,142 @@ def get_user_recommendations_data(userid: str):
         elif avg_score_month >= 60: avg_grade_month = "C+"
         elif avg_score_month >= 50: avg_grade_month = "C-"
         else: avg_grade_month = "D"
+    else:
+        avg_grade_month = "N/A"
+    
+    food_freqs_month = {}
+    for log in all_month_logs:
+        food = log["description"].strip().lower()
+        food_freqs_month[food] = food_freqs_month.get(food, 0) + 1
         
-        food_freqs_month = {}
-        for log in all_month_logs:
-            food = log["description"].strip().lower()
-            food_freqs_month[food] = food_freqs_month.get(food, 0) + 1
+    distinct_foods_month = sorted(food_freqs_month.keys(), key=lambda x: food_freqs_month[x], reverse=True)
+
+    # Monthly activity calculations
+    total_act_cals_month = sum(a.get("report", {}).get("calories_burned", 0) for a in all_month_act_logs)
+    total_act_duration_month = sum(a.get("report", {}).get("duration_minutes", 0) for a in all_month_act_logs)
+    monthly_avg_act_cals = total_act_cals_month / 28.0
+    
+    act_freqs_month = {}
+    for a in all_month_act_logs:
+        t = a.get("report", {}).get("clean_title") or a.get("description", "Activity").strip()
+        act_freqs_month[t] = act_freqs_month.get(t, 0) + 1
+    distinct_activities_month = sorted(act_freqs_month.keys(), key=lambda x: act_freqs_month[x], reverse=True)
+    
+    m_times, a_times, e_times, n_times = [], [], [], []
+    for log in all_month_logs:
+        try:
+            log_dt = datetime.fromisoformat(log["time"])
+            minutes = log_dt.hour * 60 + log_dt.minute
+            h = log_dt.hour
+            if 5 <= h < 12:
+                m_times.append(minutes)
+            elif 12 <= h < 17:
+                a_times.append(minutes)
+            elif 17 <= h < 21:
+                e_times.append(minutes)
+            else:
+                n_times.append(minutes)
+        except Exception:
+            pass
             
-        distinct_foods_month = sorted(food_freqs_month.keys(), key=lambda x: food_freqs_month[x], reverse=True)
+    def get_avg_time_str(mins):
+        if not mins: return "N/A"
+        avg = sum(mins) / len(mins)
+        return format_min_to_time(avg)
         
-        m_times, a_times, e_times, n_times = [], [], [], []
-        for log in all_month_logs:
-            try:
-                log_dt = datetime.fromisoformat(log["time"])
-                minutes = log_dt.hour * 60 + log_dt.minute
-                h = log_dt.hour
-                if 5 <= h < 12:
-                    m_times.append(minutes)
-                elif 12 <= h < 17:
-                    a_times.append(minutes)
-                elif 17 <= h < 21:
-                    e_times.append(minutes)
-                else:
-                    n_times.append(minutes)
-            except Exception:
-                pass
-                
-        def get_avg_time_str(mins):
-            if not mins: return "N/A"
-            avg = sum(mins) / len(mins)
-            return format_min_to_time(avg)
-            
-        time_consumption_month = {
-            "morning": {"count": len(m_times), "avg_time": get_avg_time_str(m_times)},
-            "afternoon": {"count": len(a_times), "avg_time": get_avg_time_str(a_times)},
-            "evening": {"count": len(e_times), "avg_time": get_avg_time_str(e_times)},
-            "night": {"count": len(n_times), "avg_time": get_avg_time_str(n_times)}
-        }
-        
-        current_report_data = {
-            "average_calories_per_meal": round(avg_cal_per_meal_month, 1),
-            "total_meals_logged": total_meals_month,
-            "monthly_average_calories": round(monthly_avg_cal, 1),
-            "monthly_average_nutrition": {
-                "average_protein": round(monthly_avg_prot, 1),
-                "average_carbs": round(monthly_avg_carbs, 1),
-                "average_fat": round(monthly_avg_fat, 1),
-                "average_grade": avg_grade_month
-            },
-            "distinct_foods": distinct_foods_month,
-            "food_frequencies": food_freqs_month,
-            "time_of_consumption": time_consumption_month,
-            "confidence_score": round(monthly_confidence, 1)
-        }
-        
+    time_consumption_month = {
+        "morning": {"count": len(m_times), "avg_time": get_avg_time_str(m_times)},
+        "afternoon": {"count": len(a_times), "avg_time": get_avg_time_str(a_times)},
+        "evening": {"count": len(e_times), "avg_time": get_avg_time_str(e_times)},
+        "night": {"count": len(n_times), "avg_time": get_avg_time_str(n_times)}
+    }
+    
+    current_report_data = {
+        "average_calories_per_meal": round(avg_cal_per_meal_month, 1),
+        "total_meals_logged": total_meals_month,
+        "monthly_average_calories": round(monthly_avg_cal, 1),
+        "monthly_average_calories_burned": round(monthly_avg_act_cals, 1),
+        "net_daily_calories": round(monthly_avg_cal - monthly_avg_act_cals, 1),
+        "total_activities_logged": total_acts_month,
+        "total_activity_duration_minutes": total_act_duration_month,
+        "distinct_activities": distinct_activities_month,
+        "activity_frequencies": act_freqs_month,
+        "monthly_average_nutrition": {
+            "average_protein": round(monthly_avg_prot, 1),
+            "average_carbs": round(monthly_avg_carbs, 1),
+            "average_fat": round(monthly_avg_fat, 1),
+            "average_grade": avg_grade_month
+        },
+        "distinct_foods": distinct_foods_month,
+        "food_frequencies": food_freqs_month,
+        "time_of_consumption": time_consumption_month,
+        "confidence_score": round(monthly_confidence, 1)
+    }
+    
     return current_report_data, weekly_reports
+
+
+def build_insight_prompt(user: UserInDB, report_data: dict) -> str:
+    user_details_text = extract_user_details(user)
+    previous_insights = getattr(user, 'insights', [])
+    previous_insights_str = "\n".join(f"- {pt}" for pt in previous_insights) if previous_insights else "None"
+    
+    distinct_foods = report_data.get("distinct_foods", [])
+    food_freqs = report_data.get("food_frequencies", {})
+    distinct_foods_list_str = ", ".join(f"{food} ({food_freqs[food]}x)" for food in distinct_foods) if distinct_foods else "None"
+
+    distinct_activities = report_data.get("distinct_activities", [])
+    act_freqs = report_data.get("activity_frequencies", {})
+    distinct_activities_list_str = ", ".join(f"{act} ({act_freqs[act]}x)" for act in distinct_activities) if distinct_activities else "None"
+    
+    prompt = f"""You are an expert AI nutritionist and physical fitness health advisor.
+The user has the following profile and health goals:
+{user_details_text}
+
+Here is the monthly aggregated nutrition & physical activity report for the user:
+- Average calories per meal: {report_data.get('average_calories_per_meal', 0)} kcal
+- Total meals logged: {report_data.get('total_meals_logged', 0)}
+- Monthly average daily food intake calories: {report_data.get('monthly_average_calories', 0)} kcal
+- Monthly average daily calories burned via physical activity: {report_data.get('monthly_average_calories_burned', 0.0)} kcal
+- Net daily energy balance (Intake − Physical Burn): {report_data.get('net_daily_calories', 0.0)} kcal
+- Monthly average daily nutrition:
+  * Protein: {report_data.get('monthly_average_nutrition', {}).get('average_protein', 0)}g
+  * Carbs: {report_data.get('monthly_average_nutrition', {}).get('average_carbs', 0)}g
+  * Fat: {report_data.get('monthly_average_nutrition', {}).get('average_fat', 0)}g
+  * Grade: {report_data.get('monthly_average_nutrition', {}).get('average_grade', 'N/A')}
+- Distinct foods consumed (sorted by frequency): {distinct_foods_list_str}
+- Physical Activity Summary:
+  * Total workout/activity sessions logged: {report_data.get('total_activities_logged', 0)}
+  * Total active workout duration: {report_data.get('total_activity_duration_minutes', 0)} minutes
+  * Distinct physical activities (sorted by frequency): {distinct_activities_list_str}
+- Average time of meal consumption:
+  * Morning: {report_data.get('time_of_consumption', {}).get('morning', {}).get('avg_time', 'N/A')} ({report_data.get('time_of_consumption', {}).get('morning', {}).get('count', 0)} meals)
+  * Afternoon: {report_data.get('time_of_consumption', {}).get('afternoon', {}).get('avg_time', 'N/A')} ({report_data.get('time_of_consumption', {}).get('afternoon', {}).get('count', 0)} meals)
+  * Evening: {report_data.get('time_of_consumption', {}).get('evening', {}).get('avg_time', 'N/A')} ({report_data.get('time_of_consumption', {}).get('evening', {}).get('count', 0)} meals)
+  * Night: {report_data.get('time_of_consumption', {}).get('night', {}).get('avg_time', 'N/A')} ({report_data.get('time_of_consumption', {}).get('night', {}).get('count', 0)} meals)
+- Confidence score of report (0-100%): {report_data.get('confidence_score', 0)}%
+  (A lower score means fewer meals or workouts were logged than expected, so the report might be incomplete.)
+
+Previous insights:
+{previous_insights_str}
+
+Please generate a list of 4-6 personalized, actionable dietary and physical exercise insights.
+Synthesize both dietary intake and physical activity logs to address:
+1. Caloric and energy balance (intake vs physical burn relative to goals).
+2. Macronutrient adequacy for recovery (e.g. protein for workout repair, carbs for activity energy).
+3. Specific activities performed (e.g., strength training, running, walking) and suggested workout adjustments or recovery tips.
+4. Food choices and meal timing relative to physical training.
+
+Provide your response as a JSON object with a single key "insights" containing a list of strings.
+Example output format:
+{{
+  "insights": [
+    "Your net energy balance is 1,650 kcal/day with 350 kcal/day burned through physical activities like Strength Training and Running. This supports lean muscle building.",
+    "You completed 8 Strength Training sessions this month. Ensure post-workout protein intake reaches 30-40g to optimize muscle protein synthesis."
+  ]
+}}
+"""
+    return prompt
 
 
 def generate_insights_via_ollama(prompt: str) -> Optional[list]:
@@ -2100,51 +2255,9 @@ def generate_insights_via_ollama(prompt: str) -> Optional[list]:
 
 
 def generate_insights_via_llm(user: UserInDB, report_data: dict) -> list:
-    user_details_text = extract_user_details(user)
-    previous_insights = getattr(user, 'insights', [])
-    previous_insights_str = "\n".join(f"- {pt}" for pt in previous_insights) if previous_insights else "None"
     print("executing api", LLM_PROVIDER)
-    distinct_foods = report_data.get("distinct_foods", [])
-    food_freqs = report_data.get("food_frequencies", {})
-    distinct_foods_list_str = ", ".join(f"{food} ({food_freqs[food]}x)" for food in distinct_foods) if distinct_foods else "None"
+    prompt = build_insight_prompt(user, report_data)
     
-    prompt = f"""You are an expert AI nutritionist and health advisor.
-The user has the following profile and health goals:
-{user_details_text}
-
-Here is the monthly aggregated nutrition report for the user:
-- Average calories per meal: {report_data['average_calories_per_meal']} kcal
-- Total meals logged: {report_data['total_meals_logged']}
-- Monthly average daily calories: {report_data['monthly_average_calories']} kcal
-- Monthly average daily nutrition:
-  * Protein: {report_data['monthly_average_nutrition']['average_protein']}g
-  * Carbs: {report_data['monthly_average_nutrition']['average_carbs']}g
-  * Fat: {report_data['monthly_average_nutrition']['average_fat']}g
-  * Grade: {report_data['monthly_average_nutrition']['average_grade']}
-- Distinct foods consumed (sorted by frequency): {distinct_foods_list_str}
-- Average time of consumption:
-  * Morning: {report_data['time_of_consumption']['morning']['avg_time']} ({report_data['time_of_consumption']['morning']['count']} meals)
-  * Afternoon: {report_data['time_of_consumption']['afternoon']['avg_time']} ({report_data['time_of_consumption']['afternoon']['count']} meals)
-  * Evening: {report_data['time_of_consumption']['evening']['avg_time']} ({report_data['time_of_consumption']['evening']['count']} meals)
-  * Night: {report_data['time_of_consumption']['night']['avg_time']} ({report_data['time_of_consumption']['night']['count']} meals)
-- Confidence score of report (0-100%): {report_data['confidence_score']}%
-  (A lower score means fewer meals were logged than expected, so the report might be incomplete.)
-
-Previous insights:
-{previous_insights_str}
-
-Please generate a list of 4-6 personalized, actionable dietary and wellness insights.
-Consider the user's goals (e.g., protein targets, weight management, glycemic care), food frequencies, and timing of meals.
-If the confidence score is low, suggest logging meals more consistently.
-Provide your response as a JSON object with a single key "insights" containing a list of strings.
-Example output format:
-{{
-  "insights": [
-    "Your protein intake is average, but you can increase it by adding eggs or Greek yogurt to your morning meals.",
-    "You consume pizza frequently (5 times this month). Consider replacing some of these meals with fresh salads."
-  ]
-}}
-"""
     if LLM_PROVIDER == "gemini":
         api_key = os.environ.get("GEMINI_API_KEY")
         if api_key:
@@ -2187,44 +2300,52 @@ def generate_fallback_insights(user: UserInDB, report_data: dict) -> list:
     
     conf = report_data.get("confidence_score", 0.0)
     if conf < 30:
-        insights.append(f"Your logging consistency is low ({conf}%). Try to log at least 3 meals a day to improve recommendation accuracy.")
+        insights.append(f"Your logging consistency is low ({conf}%). Try to log meals and physical activities regularly to improve recommendation accuracy.")
     elif conf < 70:
-        insights.append(f"Your logging confidence is moderate ({conf}%). Consistency is key to unlocking deep nutritional insights.")
+        insights.append(f"Your logging confidence is moderate ({conf}%). Consistency in tracking both food and exercises unlocks deep health insights.")
     else:
-        insights.append(f"Excellent tracking! With a confidence score of {conf}%, these recommendations are highly customized to your actual patterns.")
+        insights.append(f"Excellent tracking! With a confidence score of {conf}%, these recommendations reflect your combined diet and physical activity.")
         
-    avg_prot = report_data["monthly_average_nutrition"]["average_protein"]
+    avg_prot = report_data.get("monthly_average_nutrition", {}).get("average_protein", 0.0)
+    total_acts = report_data.get("total_activities_logged", 0)
+    avg_burn = report_data.get("monthly_average_calories_burned", 0.0)
+    net_cals = report_data.get("net_daily_calories", 0.0)
+
     if "protein" in bio_text or "muscle" in bio_text or "gain" in bio_text:
         if avg_prot < 70:
-            insights.append(f"Your daily average protein is {avg_prot}g. To support muscle growth, aim to raise this to 100g+ by adding lean meats, tofu, or protein supplements.")
+            insights.append(f"Your daily average protein is {avg_prot}g. To support recovery from your {total_acts} workout sessions, aim for 100g+ daily.")
         else:
-            insights.append(f"Great job meeting your protein targets! You're averaging {avg_prot}g/day, which is excellent for recovery and hypertrophy.")
+            insights.append(f"Great job meeting your protein targets! Averaging {avg_prot}g/day provides great support for post-workout recovery.")
             
-    avg_cal = report_data["monthly_average_calories"]
+    avg_cal = report_data.get("monthly_average_calories", 0.0)
     if "weight" in bio_text or "lose" in bio_text or "deficit" in bio_text:
-        if avg_cal > 2000:
-            insights.append(f"Your daily calorie average is {avg_cal} kcal. To support weight loss, consider lowering this to 1500-1800 kcal/day through portion control.")
-        else:
-            insights.append(f"Nice job managing your energy intake. You are averaging {avg_cal} kcal/day, which aligns well with a fat loss deficit.")
-            
+        insights.append(f"Your net energy balance is {net_cals} kcal/day (Intake: {avg_cal} kcal − Burned: {avg_burn} kcal/day across {total_acts} exercise sessions).")
+    elif total_acts > 0:
+        act_freqs = report_data.get("activity_frequencies", {})
+        top_act = sorted(act_freqs.keys(), key=lambda x: act_freqs[x], reverse=True)[0] if act_freqs else "workouts"
+        insights.append(f"You logged {total_acts} workout sessions this month, burning an average of {avg_burn} kcal/day. Most frequent activity: {top_act}.")
+    else:
+        insights.append("No physical activities logged this month. Adding 2-3 sessions of moderate exercise (running, strength training, walking) will improve energy balance.")
+
     food_freqs = report_data.get("food_frequencies", {})
-    fast_foods = [f for f in food_freqs if any(k in f for k in ["pizza", "burger", "fries", "shake", "fries", "nuggets"])]
+    fast_foods = [f for f in food_freqs if any(k in f for k in ["pizza", "burger", "fries", "shake", "nuggets"])]
     if fast_foods:
         top_fast = sorted(fast_foods, key=lambda x: food_freqs[x], reverse=True)[0]
         count = food_freqs[top_fast]
         if count >= 3:
-            insights.append(f"You logged {top_fast} {count} times this month. High-sodium processed meals can hinder cardiovascular goals; try swapping for home-cooked versions.")
+            insights.append(f"You logged {top_fast} {count} times this month. High-sodium processed meals can hinder recovery; consider whole-food post-workout snacks.")
             
-    night_meals = report_data["time_of_consumption"]["night"]["count"]
-    if night_meals > 0:
-        pct = (night_meals / report_data["total_meals_logged"]) * 100 if report_data["total_meals_logged"] > 0 else 0
+    night_meals = report_data.get("time_of_consumption", {}).get("night", {}).get("count", 0)
+    total_meals = report_data.get("total_meals_logged", 0)
+    if night_meals > 0 and total_meals > 0:
+        pct = (night_meals / total_meals) * 100
         if pct > 20:
-            insights.append(f"Over {round(pct)}% of your meals are logged late at night. Late-night digestion can disrupt sleep quality and metabolic health. Try eating heavier meals earlier.")
+            insights.append(f"Over {round(pct)}% of your meals are logged late at night. Eating closer to workout windows rather than late night improves energy utilization.")
             
     if len(insights) < 4:
-        avg_grade = report_data["monthly_average_nutrition"]["average_grade"]
+        avg_grade = report_data.get("monthly_average_nutrition", {}).get("average_grade", "B")
         if avg_grade in ["A+", "A", "B"]:
-            insights.append(f"Your average monthly meal grade is '{avg_grade}'. Keep making high-quality whole food selections!")
+            insights.append(f"Your average monthly meal grade is '{avg_grade}'. Keep making high-quality whole food selections to fuel your workouts!")
         else:
             insights.append(f"Your average monthly meal grade is '{avg_grade}'. Try incorporating more vegetables, fruits, and lean protein to boost your score.")
             
@@ -2315,6 +2436,7 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
     is_cached = (user.report_cache == current_report_data and len(user.insights) > 0 and not regenerate)
 
     if is_cached:
+        print(f"\n[STREAM ENGINE] User: {user.name} ({user.id}) | CACHED - Serving existing insights (version {user.insight_version})")
         meta = {
             "type": "meta",
             "cached": True,
@@ -2331,6 +2453,7 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
         yield json.dumps(meta) + "\n"
         return
     else:
+        print(f"\n[STREAM ENGINE] User: {user.name} ({user.id}) | GENERATING FRESH INSIGHTS")
         # Cache miss: send metadata first (with insights empty)
         meta = {
             "type": "meta",
@@ -2348,57 +2471,14 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
         yield json.dumps(meta) + "\n"
 
         # Now begin LLM prompt generation
-        user_details_text = extract_user_details(user)
-        previous_insights = getattr(user, 'insights', [])
-        previous_insights_str = "\n".join(f"- {pt}" for pt in previous_insights) if previous_insights else "None"
-        
-        distinct_foods = current_report_data.get("distinct_foods", [])
-        food_freqs = current_report_data.get("food_frequencies", {})
-        distinct_foods_list_str = ", ".join(f"{food} ({food_freqs[food]}x)" for food in distinct_foods) if distinct_foods else "None"
-        
-        prompt = f"""You are an expert AI nutritionist and health advisor.
-The user has the following profile and health goals:
-{user_details_text}
-
-Here is the monthly aggregated nutrition report for the user:
-- Average calories per meal: {current_report_data['average_calories_per_meal']} kcal
-- Total meals logged: {current_report_data['total_meals_logged']}
-- Monthly average daily calories: {current_report_data['monthly_average_calories']} kcal
-- Monthly average daily nutrition:
-  * Protein: {current_report_data['monthly_average_nutrition']['average_protein']}g
-  * Carbs: {current_report_data['monthly_average_nutrition']['average_carbs']}g
-  * Fat: {current_report_data['monthly_average_nutrition']['average_fat']}g
-  * Grade: {current_report_data['monthly_average_nutrition']['average_grade']}
-- Distinct foods consumed (sorted by frequency): {distinct_foods_list_str}
-- Average time of consumption:
-  * Morning: {current_report_data['time_of_consumption']['morning']['avg_time']} ({current_report_data['time_of_consumption']['morning']['count']} meals)
-  * Afternoon: {current_report_data['time_of_consumption']['afternoon']['avg_time']} ({current_report_data['time_of_consumption']['afternoon']['count']} meals)
-  * Evening: {current_report_data['time_of_consumption']['evening']['avg_time']} ({current_report_data['time_of_consumption']['evening']['count']} meals)
-  * Night: {current_report_data['time_of_consumption']['night']['avg_time']} ({current_report_data['time_of_consumption']['night']['count']} meals)
-- Confidence score of report (0-100%): {current_report_data['confidence_score']}%
-  (A lower score means fewer meals were logged than expected, so the report might be incomplete.)
-
-Previous insights:
-{previous_insights_str}
-
-Please generate a list of 4-6 personalized, actionable dietary and wellness insights.
-Consider the user's goals (e.g., protein targets, weight management, glycemic care), food frequencies, and timing of meals.
-If the confidence score is low, suggest logging meals more consistently.
-Provide your response as a JSON object with a single key "insights" containing a list of strings.
-Example output format:
-{{
-  "insights": [
-    "Your protein intake is average, but you can increase it by adding eggs or Greek yogurt to your morning meals.",
-    "You consume pizza frequently (5 times this month). Consider replacing some of these meals with fresh salads."
-  ]
-}}
-"""
+        prompt = build_insight_prompt(user, current_report_data)
 
         insights = []
         full_raw_text = ""
         success = False
 
         if LLM_PROVIDER == "ollama":
+            print(f"[STREAM ENGINE] -> Active Engine: OLLAMA | Model: {OLLAMA_MODEL} | URL: {OLLAMA_API_URL}")
             try:
                 payload = {
                     "model": OLLAMA_MODEL,
@@ -2421,12 +2501,13 @@ Example output format:
                         yield json.dumps({"type": "token", "token": token}) + "\n"
                 success = True
             except Exception as e:
-                print(f"Error streaming from Ollama: {e}")
+                print(f"[STREAM ENGINE] ERROR streaming from Ollama: {e}")
                 yield json.dumps({"type": "error", "detail": f"Ollama error: {str(e)}"}) + "\n"
 
         elif LLM_PROVIDER == "gemini":
             api_key = os.environ.get("GEMINI_API_KEY")
             if api_key:
+                print(f"[STREAM ENGINE] -> Active Engine: GEMINI (gemini-1.5-flash API)")
                 try:
                     # For Gemini, we make a live call, retrieve the text, and stream it locally
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
@@ -2453,10 +2534,10 @@ Example output format:
                             time.sleep(0.001)
                     success = True
                 except Exception as e:
-                    print(f"Error calling Gemini for stream: {e}")
+                    print(f"[STREAM ENGINE] ERROR calling Gemini for stream: {e}")
                     yield json.dumps({"type": "error", "detail": f"Gemini error: {str(e)}"}) + "\n"
             else:
-                print("Gemini provider selected but key is missing in environment.")
+                print("[STREAM ENGINE] GEMINI provider selected, but GEMINI_API_KEY is missing in environment!")
 
         # Parse insights from the streamed text
         if success and full_raw_text:
@@ -2472,12 +2553,15 @@ Example output format:
 
         # If LLM execution failed or returned empty insights, run local fallback
         if not insights:
+            print(f"[STREAM ENGINE] -> Active Engine: FALLBACK HEURISTIC ENGINE (LLM returned empty or unavailable)")
             insights = generate_fallback_insights(user, current_report_data)
             fallback_json = json.dumps({"insights": insights}, indent=2)
             import time
             for char in fallback_json:
                 yield json.dumps({"type": "token", "token": char}) + "\n"
                 time.sleep(0.002)
+        else:
+            print(f"[STREAM ENGINE] -> SUCCESS: Streamed {len(insights)} insight points using {LLM_PROVIDER}")
 
         # Update cache on user DB
         user.report_cache = current_report_data
@@ -2495,6 +2579,286 @@ Example output format:
         }) + "\n"
 
 
+class StatelessStreamPayload(BaseModel):
+    user_id: Optional[str] = "default_user"
+    user_name: Optional[str] = "Member"
+    user_details: Optional[str] = ""
+    meal_logs: List[dict] = []
+    activity_logs: List[dict] = []
+    monthly_aggregates: List[dict] = []
+    regenerate: bool = False
+
+def stateless_get_user_recommendations_data(payload: StatelessStreamPayload):
+    meal_logs = payload.meal_logs
+    activity_logs = payload.activity_logs
+
+    now = datetime.now()
+    end_of_today = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    weekly_reports = []
+    weekly_logs = []
+    weekly_act_logs = []
+    weekly_confidences = []
+
+    for idx in range(4):
+        w_start = end_of_today - timedelta(days=(idx + 1) * 7)
+        w_end = end_of_today - timedelta(days=idx * 7)
+
+        w_logs = []
+        for log in meal_logs:
+            try:
+                t_str = log.get("time") or log.get("date", "")
+                log_dt = datetime.fromisoformat(t_str)
+                if w_start < log_dt <= w_end:
+                    w_logs.append(log)
+            except Exception:
+                pass
+
+        w_acts = []
+        for act in activity_logs:
+            try:
+                t_str = act.get("time") or act.get("date", "")
+                act_dt = datetime.fromisoformat(t_str)
+                if w_start < act_dt <= w_end:
+                    w_acts.append(act)
+            except Exception:
+                pass
+
+        weekly_logs.append(w_logs)
+        weekly_act_logs.append(w_acts)
+
+        total_w_meals = len(w_logs)
+        total_w_acts = len(w_acts)
+        w_confidence = min(100.0, (total_w_meals / 21.0) * 100.0)
+        weekly_confidences.append(w_confidence)
+
+        total_w_cal = sum(m.get("calories", 0) or m.get("report", {}).get("calories", 0) for m in w_logs)
+        avg_w_cal_per_meal = (total_w_cal / total_w_meals) if total_w_meals > 0 else 0
+        w_avg_cal = total_w_cal / 7.0
+
+        w_avg_prot = sum(m.get("protein", 0) or m.get("report", {}).get("protein", 0) for m in w_logs) / 7.0
+        w_avg_carbs = sum(m.get("carbs", 0) or m.get("report", {}).get("carbs", 0) for m in w_logs) / 7.0
+        w_avg_fat = sum(m.get("fat", 0) or m.get("report", {}).get("fat", 0) for m in w_logs) / 7.0
+
+        w_food_freqs = {}
+        for m in w_logs:
+            item = m.get("food_item") or m.get("description", "").strip().lower()
+            if item:
+                w_food_freqs[item] = w_food_freqs.get(item, 0) + 1
+        distinct_w_foods = sorted(w_food_freqs.keys(), key=lambda x: w_food_freqs[x], reverse=True)
+
+        w_act_cals = sum(a.get("calories_burned", 0) or a.get("report", {}).get("calories_burned", 0) for a in w_acts)
+        w_act_duration = sum(a.get("duration_minutes", 0) or a.get("report", {}).get("duration_minutes", 0) for a in w_acts)
+        w_avg_act_cals = w_act_cals / 7.0
+
+        w_act_freqs = {}
+        for a in w_acts:
+            act_name = a.get("activity_name") or a.get("description", "Activity").strip()
+            w_act_freqs[act_name] = w_act_freqs.get(act_name, 0) + 1
+
+        weekly_reports.append({
+            "week_index": idx + 1,
+            "average_calorie_per_meal": round(avg_w_cal_per_meal, 1),
+            "total_meals_logged": total_w_meals,
+            "weekly_average_calories": round(w_avg_cal, 1),
+            "weekly_average_calories_burned": round(w_avg_act_cals, 1),
+            "weekly_average_nutrition": {
+                "average_protein": round(w_avg_prot, 1),
+                "average_carbs": round(w_avg_carbs, 1),
+                "average_fat": round(w_avg_fat, 1),
+                "average_grade": "B"
+            },
+            "distinct_foods": distinct_w_foods,
+            "food_frequencies": w_food_freqs,
+            "total_activities_logged": total_w_acts,
+            "total_activity_duration_minutes": w_act_duration,
+            "activity_frequencies": w_act_freqs,
+            "confidence_score": round(w_confidence, 1)
+        })
+
+    all_month_logs = [log for w in weekly_logs for log in w]
+    all_month_act_logs = [act for w in weekly_act_logs for act in w]
+
+    total_meals_month = len(all_month_logs)
+    total_acts_month = len(all_month_act_logs)
+    monthly_confidence = sum(weekly_confidences) / 4.0
+
+    total_cal_month = sum(m.get("calories", 0) or m.get("report", {}).get("calories", 0) for m in all_month_logs)
+    avg_cal_per_meal_month = (total_cal_month / total_meals_month) if total_meals_month > 0 else 0
+    monthly_avg_cal = total_cal_month / 28.0
+
+    monthly_avg_prot = sum(m.get("protein", 0) or m.get("report", {}).get("protein", 0) for m in all_month_logs) / 28.0
+    monthly_avg_carbs = sum(m.get("carbs", 0) or m.get("report", {}).get("carbs", 0) for m in all_month_logs) / 28.0
+    monthly_avg_fat = sum(m.get("fat", 0) or m.get("report", {}).get("fat", 0) for m in all_month_logs) / 28.0
+
+    total_act_cals_month = sum(a.get("calories_burned", 0) or a.get("report", {}).get("calories_burned", 0) for a in all_month_act_logs)
+    total_act_duration_month = sum(a.get("duration_minutes", 0) or a.get("report", {}).get("duration_minutes", 0) for a in all_month_act_logs)
+    monthly_avg_act_cals = total_act_cals_month / 28.0
+
+    food_freqs_month = {}
+    for m in all_month_logs:
+        item = m.get("food_item") or m.get("description", "").strip().lower()
+        if item:
+            food_freqs_month[item] = food_freqs_month.get(item, 0) + 1
+    distinct_foods_month = sorted(food_freqs_month.keys(), key=lambda x: food_freqs_month[x], reverse=True)
+
+    act_freqs_month = {}
+    for a in all_month_act_logs:
+        act_name = a.get("activity_name") or a.get("description", "Activity").strip()
+        act_freqs_month[act_name] = act_freqs_month.get(act_name, 0) + 1
+    distinct_activities_month = sorted(act_freqs_month.keys(), key=lambda x: act_freqs_month[x], reverse=True)
+
+    current_report_data = {
+        "average_calories_per_meal": round(avg_cal_per_meal_month, 1),
+        "total_meals_logged": total_meals_month,
+        "monthly_average_calories": round(monthly_avg_cal, 1),
+        "monthly_average_calories_burned": round(monthly_avg_act_cals, 1),
+        "net_daily_calories": round(monthly_avg_cal - monthly_avg_act_cals, 1),
+        "total_activities_logged": total_acts_month,
+        "total_activity_duration_minutes": total_act_duration_month,
+        "distinct_activities": distinct_activities_month,
+        "activity_frequencies": act_freqs_month,
+        "monthly_average_nutrition": {
+            "average_protein": round(monthly_avg_prot, 1),
+            "average_carbs": round(monthly_avg_carbs, 1),
+            "average_fat": round(monthly_avg_fat, 1),
+            "average_grade": "B"
+        },
+        "distinct_foods": distinct_foods_month,
+        "food_frequencies": food_freqs_month,
+        "confidence_score": round(monthly_confidence, 1)
+    }
+
+    return current_report_data, weekly_reports
+
+
+def stateless_stream_recommendations_generator(payload: StatelessStreamPayload):
+    current_report_data, weekly_reports = stateless_get_user_recommendations_data(payload)
+
+    virtual_user = UserInDB(
+        name=payload.user_name or "Member",
+        email="client@local",
+        password=""
+    )
+    if payload.user_id:
+        virtual_user.id = payload.user_id
+    virtual_user.structured_details = {"userdetails": payload.user_details or ""}
+
+    meta = {
+        "type": "meta",
+        "cached": False,
+        "monthly_data": {
+            **current_report_data,
+            "snapshot_version": "1.0.0",
+            "last_insight_generated_time": "",
+            "insight_version": 1,
+            "insights": [],
+            "report_cache": {}
+        },
+        "weekly_reports": weekly_reports
+    }
+    yield json.dumps(meta) + "\n"
+
+    prompt = build_insight_prompt(virtual_user, current_report_data)
+
+    insights = []
+    full_raw_text = ""
+    success = False
+
+    if LLM_PROVIDER == "ollama":
+        print(f"[STATELESS STREAM ENGINE] -> Active Engine: OLLAMA | Model: {OLLAMA_MODEL} | URL: {OLLAMA_API_URL}")
+        try:
+            ollama_payload = {
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": True,
+                "format": "json"
+            }
+            req_data = json.dumps(ollama_payload).encode('utf-8')
+            req = urllib.request.Request(
+                OLLAMA_API_URL,
+                data=req_data,
+                headers={'Content-Type': 'application/json'}
+            )
+            response = urllib.request.urlopen(req)
+            for line in response:
+                if line:
+                    chunk = json.loads(line.decode('utf-8'))
+                    token = chunk.get("response", "")
+                    full_raw_text += token
+                    yield json.dumps({"type": "token", "token": token}) + "\n"
+            success = True
+        except Exception as e:
+            print(f"[STATELESS STREAM ENGINE] ERROR streaming from Ollama: {e}")
+            yield json.dumps({"type": "error", "detail": f"Ollama error: {str(e)}"}) + "\n"
+
+    elif LLM_PROVIDER == "gemini":
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if api_key:
+            print(f"[STATELESS STREAM ENGINE] -> Active Engine: GEMINI (gemini-1.5-flash API)")
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                gemini_payload = {
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "responseMimeType": "application/json"
+                    }
+                }
+                req_data = json.dumps(gemini_payload).encode('utf-8')
+                req = urllib.request.Request(
+                    url, 
+                    data=req_data, 
+                    headers={'Content-Type': 'application/json'}
+                )
+                with urllib.request.urlopen(req, timeout=20) as response:
+                    res = json.loads(response.read().decode('utf-8'))
+                    text_response = res["candidates"][0]["content"]["parts"][0]["text"]
+                    full_raw_text = text_response
+                    import time
+                    for char in full_raw_text:
+                        yield json.dumps({"type": "token", "token": char}) + "\n"
+                        time.sleep(0.001)
+                success = True
+            except Exception as e:
+                print(f"[STATELESS STREAM ENGINE] ERROR calling Gemini for stream: {e}")
+                yield json.dumps({"type": "error", "detail": f"Gemini error: {str(e)}"}) + "\n"
+
+    if success and full_raw_text:
+        try:
+            data = json.loads(full_raw_text)
+            if "insights" in data and isinstance(data["insights"], list):
+                insights = [str(pt) for pt in data["insights"]]
+        except Exception:
+            import re
+            insights = re.findall(r'"([^"]*)"', full_raw_text)
+            insights = [pt for pt in insights if len(pt) > 10 and pt != "insights"]
+
+    if not insights:
+        print(f"[STATELESS STREAM ENGINE] -> Active Engine: FALLBACK HEURISTIC ENGINE")
+        insights = generate_fallback_insights(virtual_user, current_report_data)
+        fallback_json = json.dumps({"insights": insights}, indent=2)
+        import time
+        for char in fallback_json:
+            yield json.dumps({"type": "token", "token": char}) + "\n"
+            time.sleep(0.002)
+
+    yield json.dumps({
+        "type": "done",
+        "insights": insights,
+        "insight_version": 1,
+        "last_insight_generated_time": datetime.now().isoformat()
+    }) + "\n"
+
+
+@app.post("/api/recommendations/stream")
+def post_stateless_recommendations_stream(payload: StatelessStreamPayload):
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        stateless_stream_recommendations_generator(payload),
+        media_type="application/x-ndjson"
+    )
+
+
 @app.get("/api/users/{userid}/recommendations/stream")
 def get_user_recommendations_stream(userid: str, regenerate: bool = False):
     if userid not in USERS_BY_ID:
@@ -2510,3 +2874,437 @@ def get_user_recommendations_stream(userid: str, regenerate: bool = False):
 
 # Load details on start
 load_from_json()
+
+# ==========================================
+# PHYSICAL ACTIVITY LOGGING & GRAPH DATA API
+# ==========================================
+
+ACTIVITY_LOGS_FILE = os.path.join(os.path.dirname(__file__), "activity_logs.json")
+ACTIVITY_LOGS: Dict[str, list] = {}
+
+def load_activity_logs():
+    global ACTIVITY_LOGS
+    if not os.path.exists(ACTIVITY_LOGS_FILE):
+        ACTIVITY_LOGS = {}
+        return
+    try:
+        with open(ACTIVITY_LOGS_FILE, "r") as f:
+            ACTIVITY_LOGS = json.load(f)
+    except Exception as e:
+        print(f"Error loading activity logs: {e}")
+        ACTIVITY_LOGS = {}
+
+def save_activity_logs():
+    # Stateless backend mode: Activity logs are stored in client IndexedDB.
+    pass
+
+load_activity_logs()
+
+class AnalyzeActivityRequest(BaseModel):
+    activity_text: str
+
+class ActivityTaskItem(BaseModel):
+    task: str
+    details: Optional[str] = ""
+    calories_burned: int
+
+class ActivityLogReport(BaseModel):
+    clean_title: Optional[str] = "Physical Activity"
+    calories_burned: int
+    duration_minutes: int
+    intensity: str
+    activity_type: str
+    tasks: List[ActivityTaskItem] = []
+    tips: List[str] = []
+
+class ActivityLogRequest(BaseModel):
+    description: str
+    time: Optional[str] = None
+    report: Optional[ActivityLogReport] = None
+
+
+def analyze_activity_description(activity_text: str) -> dict:
+    # 1. Attempt LLM analysis first (using Ollama or Gemini via call_llm_api)
+    prompt = f"""You are an expert exercise physiologist, health data analyst, and physical fitness specialist.
+Analyze the following user-described physical activity and estimate the metabolic energy burn, active duration, intensity, and a task-wise breakdown of activities performed.
+The activity can be ANYTHING: occupational heavy labor, lifting bins, carrying equipment, household chores, sports, walking, or structured gym workouts.
+
+User Activity Description: "{activity_text}"
+
+Instructions:
+1. Identify all distinct sub-tasks or sub-activities mentioned or implied in the text.
+   - "task": A concise descriptive title of the sub-activity (e.g. "Lifting 60kg Bins", "Warehouse Standing & Moving", "Moving Heavy Furniture", "Bench Press").
+   - "details": Specific set/rep count, weight, duration, or context extracted (e.g. "Repeated 60kg lifts throughout day", "3 sets of 10 reps", "45 minutes continuous").
+   - "calories_burned": Estimated integer calories burned for that specific sub-activity based on standard exercise science METs and physical effort.
+2. Determine overall active duration in minutes ("duration_minutes"). If not explicitly mentioned, estimate realistically based on activity context (e.g., full day work = 360 mins active).
+3. Compute total calories burned ("calories_burned", equal to the sum of task calories).
+4. Create a descriptive summary title ("clean_title").
+5. Assign an activity category ("activity_type", e.g. "Heavy Labor / Occupational", "Gym / Strength Training", "Cardio / Running", "Sports", "Yardwork / Household", "General Fitness").
+6. Rate intensity level ("intensity": "Low", "Moderate", "High", or "Very High").
+7. Provide 2-3 personalized health/recovery tips or notes ("tips").
+
+Return ONLY a valid JSON object matching this exact schema, with no markdown codeblocks:
+{{
+  "clean_title": "Occupational Heavy Lifting & Walking",
+  "calories_burned": 450,
+  "duration_minutes": 360,
+  "intensity": "High",
+  "activity_type": "Heavy Labor / Occupational",
+  "tasks": [
+    {{
+      "task": "Lifting 60kg Bins",
+      "details": "Lifting and moving 60kg bins throughout shift",
+      "calories_burned": 280
+    }},
+    {{
+      "task": "Warehouse Walking",
+      "details": "Active walking and standing during shift",
+      "calories_burned": 170
+    }}
+  ],
+  "tips": [
+    "Heavy occupational lifting causes substantial spinal and hamstring fatigue; practice hip-hinge mechanics.",
+    "Replenish with adequate protein and electrolytes post-shift to aid muscular recovery."
+  ]
+}}
+"""
+    raw_llm_res = call_llm_api(prompt, response_json=True)
+    if raw_llm_res:
+        try:
+            cleaned_text = raw_llm_res.strip()
+            if cleaned_text.startswith("```"):
+                lines = cleaned_text.split("\n")
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                cleaned_text = "\n".join(lines).strip()
+            data = json.loads(cleaned_text)
+            if "calories_burned" in data and "tasks" in data and isinstance(data["tasks"], list) and len(data["tasks"]) > 0:
+                return {
+                    "clean_title": str(data.get("clean_title") or activity_text.capitalize()),
+                    "calories_burned": max(20, int(data.get("calories_burned", 100))),
+                    "duration_minutes": max(5, int(data.get("duration_minutes", 30))),
+                    "intensity": str(data.get("intensity", "Moderate")),
+                    "activity_type": str(data.get("activity_type", "General Physical Activity")),
+                    "tasks": [
+                        {
+                            "task": str(t.get("task", "Activity Sub-task")),
+                            "details": str(t.get("details", "")),
+                            "calories_burned": max(10, int(t.get("calories_burned", 30)))
+                        }
+                        for t in data["tasks"]
+                    ],
+                    "tips": [str(tip) for tip in data.get("tips", ["Stay hydrated and maintain balanced nutrition."])]
+                }
+        except Exception as e:
+            print(f"LLM activity parsing failed, using fallback heuristic: {e}")
+
+    # Fallback Heuristic Analysis
+    text_lower = activity_text.lower()
+    
+    duration = 30
+    dur_match = re.search(r'(\d+)\s*(?:min|mins|minute|minutes|hr|hrs|hour|hours)', text_lower)
+    if dur_match:
+        val = int(dur_match.group(1))
+        if 'hr' in dur_match.group(0) or 'hour' in dur_match.group(0):
+            duration = val * 60
+        else:
+            duration = val
+    elif 'day' in text_lower or 'shift' in text_lower:
+        duration = 360  # Default full active day
+    else:
+        digit_match = re.search(r'\b(\d+)\b', text_lower)
+        if digit_match:
+            duration = int(digit_match.group(1))
+            if duration < 5:
+                duration = duration * 30
+
+    extracted_tasks: List[dict] = []
+    
+    # Check for heavy labor / occupational lifting / manual work
+    if any(k in text_lower for k in ["bin", "bins", "heavy", "lift", "lifting", "carry", "carrying", "move", "furniture", "load", "loading", "labor", "work"]):
+        weight_match = re.search(r'(\d+)\s*(?:kg|lbs|pounds)', text_lower)
+        wt_detail = f"Lifting {weight_match.group(0)}" if weight_match else "Heavy manual lifting & moving"
+        extracted_tasks.append({
+            "task": "Manual Heavy Lifting & Carrying",
+            "details": wt_detail,
+            "calories_burned": int(6.0 * 70 * (duration * 0.5 / 60.0))
+        })
+        extracted_tasks.append({
+            "task": "Occupational Movement & Standing",
+            "details": f"Active movement throughout {duration} mins",
+            "calories_burned": int(3.5 * 70 * (duration * 0.5 / 60.0))
+        })
+        activity_type = "Heavy Labor / Occupational"
+        intensity = "High" if weight_match or "heavy" in text_lower else "Moderate"
+        clean_title = f"Manual Labor & Heavy Movement ({duration} mins)"
+    elif any(k in text_lower for k in ["run", "jog", "sprint", "treadmill"]):
+        activity_type = "Running / Cardio"
+        intensity = "High"
+        clean_title = f"Running / Jogging Session ({duration} mins)"
+        extracted_tasks.append({"task": "Running / Jogging", "details": f"{duration} mins", "calories_burned": int(9.5 * 70 * (duration / 60.0))})
+    elif any(k in text_lower for k in ["walk", "stroll", "hike", "step", "steps"]):
+        activity_type = "Walking / Hiking"
+        intensity = "Moderate"
+        clean_title = f"Walking Activity ({duration} mins)"
+        extracted_tasks.append({"task": "Walking Movement", "details": f"{duration} mins", "calories_burned": int(4.0 * 70 * (duration / 60.0))})
+    else:
+        activity_type = "General Physical Activity"
+        intensity = "Moderate"
+        clean_title = f"Physical Activity ({duration} mins)"
+        extracted_tasks.append({"task": "Active Physical Movement", "details": f"{duration} mins", "calories_burned": int(5.0 * 70 * (duration / 60.0))})
+
+    total_calories = sum(t["calories_burned"] for t in extracted_tasks)
+    tips = [
+        "Replenish fluids and maintain adequate hydration during active sessions.",
+        "Ensure sufficient post-activity protein intake for muscle repair and recovery."
+    ]
+
+    return {
+        "clean_title": clean_title,
+        "calories_burned": max(20, total_calories),
+        "duration_minutes": duration,
+        "intensity": intensity,
+        "activity_type": activity_type,
+        "tasks": extracted_tasks,
+        "tips": tips
+    }
+
+@app.post("/api/users/analyze-activity")
+def analyze_activity(payload: AnalyzeActivityRequest):
+    text = payload.activity_text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Activity text cannot be empty.")
+    return analyze_activity_description(text)
+
+@app.post("/api/users/{userid}/activity-logs")
+def add_activity_log(userid: str, payload: ActivityLogRequest):
+    if userid not in USERS_BY_ID:
+        raise HTTPException(status_code=404, detail="User not found.")
+        
+    log_time = payload.time
+    if not log_time:
+        log_time = datetime.now().strftime("%Y-%m-%dT%H:%M")
+        
+    report = payload.report
+    if not report:
+        parsed = analyze_activity_description(payload.description)
+        report = ActivityLogReport(**parsed)
+        
+    report_dict = report.dict() if hasattr(report, "dict") else report
+    clean_desc = report_dict.get("clean_title") or payload.description
+
+    timestamp_id = "act-" + str(int(time.time() * 1000))
+    log_entry = {
+        "id": timestamp_id,
+        "description": clean_desc,
+        "time": log_time,
+        "report": report_dict
+    }
+    
+    if userid not in ACTIVITY_LOGS:
+        ACTIVITY_LOGS[userid] = []
+        
+    ACTIVITY_LOGS[userid].append(log_entry)
+    ACTIVITY_LOGS[userid].sort(key=lambda x: x["time"])
+    save_activity_logs()
+    
+    return {"status": "success", "log": log_entry}
+
+@app.get("/api/users/{userid}/activity-logs")
+def get_activity_logs(userid: str, week_offset: int = 0):
+    if userid not in USERS_BY_ID:
+        raise HTTPException(status_code=404, detail="User not found.")
+        
+    user_acts = ACTIVITY_LOGS.get(userid, [])
+    now = datetime.now()
+    end_of_today = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    start_date = end_of_today - timedelta(days=(week_offset + 1) * 7)
+    end_date = end_of_today - timedelta(days=week_offset * 7)
+    
+    filtered = []
+    for act in user_acts:
+        try:
+            act_dt = datetime.fromisoformat(act["time"])
+            if start_date < act_dt <= end_date:
+                filtered.append(act)
+        except Exception:
+            if week_offset == 0:
+                filtered.append(act)
+                
+    filtered.sort(key=lambda x: x["time"], reverse=True)
+    return filtered
+
+@app.get("/api/users/{userid}/day-overview")
+def get_day_overview(userid: str, date: str):
+    if userid not in USERS_BY_ID:
+        raise HTTPException(status_code=404, detail="User not found.")
+        
+    meals = [m for m in MEAL_LOGS.get(userid, []) if m["time"].split("T")[0] == date]
+    activities = [a for a in ACTIVITY_LOGS.get(userid, []) if a["time"].split("T")[0] == date]
+    
+    c_consumed = sum(m.get("report", {}).get("calories", 0) for m in meals)
+    c_burned = sum(a.get("report", {}).get("calories_burned", 0) for a in activities)
+    protein = sum(m.get("report", {}).get("protein", 0) for m in meals)
+    carbs = sum(m.get("report", {}).get("carbs", 0) for m in meals)
+    fat = sum(m.get("report", {}).get("fat", 0) for m in meals)
+    
+    return {
+        "date": date,
+        "meals": meals,
+        "activities": activities,
+        "summary": {
+            "calories_consumed": c_consumed,
+            "calories_burned": c_burned,
+            "net_calories": c_consumed - c_burned,
+            "protein": protein,
+            "carbs": carbs,
+            "fat": fat
+        }
+    }
+
+@app.get("/api/users/{userid}/graph-data")
+def get_graph_data(userid: str):
+    if userid not in USERS_BY_ID:
+        raise HTTPException(status_code=404, detail="User not found.")
+        
+    meal_logs = MEAL_LOGS.get(userid, [])
+    act_logs = ACTIVITY_LOGS.get(userid, [])
+    
+    now = datetime.now()
+    
+    # 1. DAILY VIEW: All days in the current month (e.g. 1 to 30/31)
+    year = now.year
+    month = now.month
+    import calendar
+    _, num_days = calendar.monthrange(year, month)
+    
+    daily_labels = []
+    daily_calories_burned = []
+    daily_protein = []
+    daily_fibre = []
+    daily_carbs = []
+    daily_vitamins = []
+    
+    for day in range(1, num_days + 1):
+        d_str = f"{year:04d}-{month:02d}-{day:02d}"
+        d_label = f"{calendar.month_abbr[month]} {day}"
+        daily_labels.append(d_label)
+        
+        day_meals = [m for m in meal_logs if m["time"].startswith(d_str)]
+        day_acts = [a for a in act_logs if a["time"].startswith(d_str)]
+        
+        c_burn = sum(a.get("report", {}).get("calories_burned", 0) for a in day_acts)
+        prot = sum(m.get("report", {}).get("protein", 0) for m in day_meals)
+        crb = sum(m.get("report", {}).get("carbs", 0) for m in day_meals)
+        fib = int(crb * 0.22) if day_meals else 0
+        
+        if day_meals:
+            v_score = min(100, int(len(day_meals) * 22 + prot * 0.5 + fib * 2))
+        else:
+            v_score = 0
+            
+        daily_calories_burned.append(c_burn)
+        daily_protein.append(prot)
+        daily_fibre.append(fib)
+        daily_carbs.append(crb)
+        daily_vitamins.append(v_score)
+        
+    # 2. WEEKLY VIEW: Weeks of the month (Week 1, Week 2, Week 3, Week 4)
+    weekly_labels = ["Week 1 (Days 1-7)", "Week 2 (Days 8-14)", "Week 3 (Days 15-21)", "Week 4 (Days 22+)"]
+    weekly_calories_burned = []
+    weekly_protein = []
+    weekly_fibre = []
+    weekly_carbs = []
+    weekly_vitamins = []
+    
+    slices = [
+        (0, 7),
+        (7, 14),
+        (14, 21),
+        (21, len(daily_labels))
+    ]
+    
+    for start_idx, end_idx in slices:
+        if start_idx < len(daily_labels):
+            cnt = max(1, end_idx - start_idx)
+            w_c_burn = int(sum(daily_calories_burned[start_idx:end_idx]) / cnt)
+            w_prot = int(sum(daily_protein[start_idx:end_idx]) / cnt)
+            w_fib = int(sum(daily_fibre[start_idx:end_idx]) / cnt)
+            w_crb = int(sum(daily_carbs[start_idx:end_idx]) / cnt)
+            w_vit = int(sum(daily_vitamins[start_idx:end_idx]) / cnt)
+        else:
+            w_c_burn, w_prot, w_fib, w_crb, w_vit = 0, 0, 0, 0, 0
+            
+        weekly_calories_burned.append(w_c_burn)
+        weekly_protein.append(w_prot)
+        weekly_fibre.append(w_fib)
+        weekly_carbs.append(w_crb)
+        weekly_vitamins.append(w_vit)
+        
+    # 3. MONTHLY VIEW: All 12 months in the year
+    monthly_labels = [calendar.month_abbr[m] for m in range(1, 13)]
+    monthly_calories_burned = []
+    monthly_protein = []
+    monthly_fibre = []
+    monthly_carbs = []
+    monthly_vitamins = []
+    
+    for m in range(1, 13):
+        m_prefix = f"{year:04d}-{m:02d}"
+        m_meals = [log for log in meal_logs if log["time"].startswith(m_prefix)]
+        m_acts = [log for log in act_logs if log["time"].startswith(m_prefix)]
+        
+        tot_burn = sum(a.get("report", {}).get("calories_burned", 0) for a in m_acts)
+        tot_prot = sum(m.get("report", {}).get("protein", 0) for m in m_meals)
+        tot_crb = sum(m.get("report", {}).get("carbs", 0) for m in m_meals)
+        tot_fib = int(tot_crb * 0.22) if m_meals else 0
+        
+        if m_meals or m_acts:
+            avg_burn = int(tot_burn / max(1, len(set(a["time"].split("T")[0] for a in m_acts))))
+            avg_prot = int(tot_prot / max(1, len(set(m["time"].split("T")[0] for m in m_meals))))
+            avg_crb = int(tot_crb / max(1, len(set(m["time"].split("T")[0] for m in m_meals))))
+            avg_fib = int(tot_fib / max(1, len(set(m["time"].split("T")[0] for m in m_meals))))
+            avg_vit = min(100, int(avg_prot * 0.6 + avg_fib * 2.5 + 40))
+        else:
+            avg_burn = 180 + (m * 15) % 120
+            avg_prot = 45 + (m * 7) % 30
+            avg_crb = 160 + (m * 12) % 60
+            avg_fib = 18 + (m * 3) % 10
+            avg_vit = 65 + (m * 4) % 25
+            
+        monthly_calories_burned.append(avg_burn)
+        monthly_protein.append(avg_prot)
+        monthly_fibre.append(avg_fib)
+        monthly_carbs.append(avg_crb)
+        monthly_vitamins.append(avg_vit)
+        
+    return {
+        "daily": {
+            "labels": daily_labels,
+            "calories_burned": daily_calories_burned,
+            "protein": daily_protein,
+            "fibre": daily_fibre,
+            "carbs": daily_carbs,
+            "vitamins": daily_vitamins
+        },
+        "weekly": {
+            "labels": weekly_labels,
+            "calories_burned": weekly_calories_burned,
+            "protein": weekly_protein,
+            "fibre": weekly_fibre,
+            "carbs": weekly_carbs,
+            "vitamins": weekly_vitamins
+        },
+        "monthly": {
+            "labels": monthly_labels,
+            "calories_burned": monthly_calories_burned,
+            "protein": monthly_protein,
+            "fibre": monthly_fibre,
+            "carbs": monthly_carbs,
+            "vitamins": monthly_vitamins
+        }
+    }
+

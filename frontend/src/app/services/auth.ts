@@ -36,7 +36,18 @@ export interface UpdateDetailsResponse {
 })
 export class AuthService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = 'http://localhost:8000/api';
+
+  get apiUrl(): string {
+    const customUrl = localStorage.getItem('API_URL');
+    if (customUrl) {
+      return customUrl.endsWith('/') ? customUrl.slice(0, -1) : customUrl;
+    }
+    return 'https://foodanalyzer-backend.onrender.com/api';
+  }
+
+  setBackendUrl(url: string): void {
+    localStorage.setItem('API_URL', url);
+  }
 
   checkEmail(email: string): Observable<CheckEmailResponse> {
     return this.http.post<CheckEmailResponse>(`${this.apiUrl}/users/check`, { email });
@@ -108,6 +119,35 @@ export class AuthService {
   getRecommendationsStreamUrl(userid: string, regenerate?: boolean): string {
     const queryParam = regenerate ? '?regenerate=true' : '';
     return `${this.apiUrl}/users/${userid}/recommendations/stream${queryParam}`;
+  }
+
+  getStatelessRecommendationsStreamUrl(): string {
+    return `${this.apiUrl}/recommendations/stream`;
+  }
+
+  getStatelessInferredMealsUrl(): string {
+    return `${this.apiUrl}/inferred-meals`;
+  }
+
+  // Physical Activity & Analytics Graph Endpoints
+  analyzeActivity(activityText: string): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/users/analyze-activity`, { activity_text: activityText });
+  }
+
+  addActivityLog(userid: string, payload: any): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/users/${userid}/activity-logs`, payload);
+  }
+
+  getActivityLogs(userid: string, weekOffset: number = 0): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/users/${userid}/activity-logs?week_offset=${weekOffset}`);
+  }
+
+  getDayOverview(userid: string, date: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/users/${userid}/day-overview?date=${date}`);
+  }
+
+  getGraphData(userid: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/users/${userid}/graph-data`);
   }
 
   // LocalStorage Helpers

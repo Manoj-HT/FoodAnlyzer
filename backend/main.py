@@ -33,7 +33,7 @@ app = FastAPI(title="FoodAnalyzer API")
 # Enable CORS for Angular Frontend running on http://localhost:4200
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200", "http://localhost:8000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

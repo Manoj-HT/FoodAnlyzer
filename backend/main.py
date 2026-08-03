@@ -1098,32 +1098,136 @@ def split_food_items(query: str) -> list:
             
     return cleaned_items
 
+FOOD_BASELINES = [
+    (["egg", "eggs"], (70, 6.0, 0.5, 5.0)),
+    (["coffee", "black coffee"], (2, 0.0, 0.0, 0.0)),
+    (["tea", "black tea"], (2, 0.0, 0.0, 0.0)),
+    (["milk"], (120, 8.0, 12.0, 5.0)),
+    (["bread", "toast"], (80, 3.0, 15.0, 1.0)),
+    (["apple", "apples"], (95, 0.5, 25.0, 0.3)),
+    (["banana", "bananas"], (105, 1.3, 27.0, 0.3)),
+    (["rice"], (130, 3.0, 28.0, 0.3)),
+    (["chicken breast", "chicken"], (165, 31.0, 0.0, 3.6)),
+    (["salad"], (100, 2.0, 8.0, 5.0)),
+    (["pizza"], (280, 12.0, 32.0, 10.0)),
+    (["burger", "cheeseburger"], (500, 25.0, 40.0, 25.0)),
+    (["dosa"], (150, 4.0, 28.0, 3.5)),
+    (["idli"], (40, 1.5, 8.0, 0.2)),
+    (["roti", "chapati"], (80, 3.0, 15.0, 0.5)),
+    (["dal"], (150, 9.0, 20.0, 3.0)),
+    (["oatmeal", "oats"], (150, 5.0, 27.0, 2.5)),
+    (["paneer"], (265, 18.0, 6.0, 20.0))
+]
+
+def analyze_food_with_llm(query: str) -> Optional[dict]:
+    prompt = f"""
+You are an expert nutritional analyst AI.
+Analyze the following natural language meal description:
+"{query}"
+
+Calculate precise total nutritional content based on standard USDA dietary reference values for the exact items, quantities, and portion sizes specified in the query.
+
+Return ONLY a valid JSON object matching this exact JSON schema:
+{{
+  "calories": <integer total kcal>,
+  "protein": <integer total protein in grams>,
+  "carbs": <integer total carbohydrates in grams>,
+  "fat": <integer total fat in grams>,
+  "items": [
+    {{
+      "name": "<food item name>",
+      "quantity": "<portion size description>",
+      "calories": <integer kcal for this item>
+    }}
+  ]
+}}
+Do NOT include markdown formatting or extra commentary outside the raw JSON object.
+"""
+    raw_response = call_llm_api(prompt, response_json=True)
+    if not raw_response:
+        return None
+    try:
+        cleaned = raw_response.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        data = json.loads(cleaned.strip())
+        
+        cal = int(data.get("calories", 0))
+        prot = int(data.get("protein", 0))
+        carbs = int(data.get("carbs", 0))
+        fat = int(data.get("fat", 0))
+        items = data.get("items", [])
+        
+        item_breakdowns = []
+        for item in items:
+            name = item.get("name", "Food item")
+            qty = item.get("quantity", "")
+            item_cal = item.get("calories", 0)
+            prefix = f"{qty} " if qty else ""
+            item_breakdowns.append(f"{prefix}{name} ({item_cal} kcal)")
+            
+        return {
+            "calories": cal,
+            "protein": prot,
+            "carbs": carbs,
+            "fat": fat,
+            "item_breakdowns": item_breakdowns
+        }
+    except Exception as e:
+        print(f"Error parsing LLM meal response: {e}. Raw: {raw_response}")
+        return None
+
 @app.post("/api/users/analyze-food")
 def analyze_food(payload: AnalyzeFoodRequest):
     query = payload.food_name.strip()
     if not query:
         raise HTTPException(status_code=400, detail="Food name query cannot be empty.")
         
+    # 1. Try LLM Parsing first if available
+    llm_result = analyze_food_with_llm(query)
+    if llm_result and llm_result.get("calories", 0) > 0:
+        total_calories = llm_result["calories"]
+        total_protein = llm_result["protein"]
+        total_carbs = llm_result["carbs"]
+        total_fat = llm_result["fat"]
+        item_breakdowns = llm_result["item_breakdowns"]
+        
+        unified_desc = " + ".join(item_breakdowns)
+        grade, tips = calculate_grade_and_tips(total_calories, total_protein, total_carbs, total_fat, unified_desc)
+        breakdown_msg = "Breakdown: " + unified_desc
+        tips.insert(0, breakdown_msg)
+        return {
+            "calories": total_calories,
+            "protein": total_protein,
+            "carbs": total_carbs,
+            "fat": total_fat,
+            "grade": grade,
+            "tips": tips
+        }
+        
+    # 2. Precise Rule-based NLP + USDA baseline lookup fallback
     NUMBER_MAP = {
         "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
         "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
         "a": 1, "an": 1
     }
     
-    # 1. Split query into distinct food items
     raw_items = split_food_items(query)
     
     total_calories = 0
-    total_protein = 0
-    total_carbs = 0
-    total_fat = 0
+    total_protein = 0.0
+    total_carbs = 0.0
+    total_fat = 0.0
     item_breakdowns = []
     
     for raw_item in raw_items:
         query_lower = raw_item.lower()
         multiplier = 1.0
         
-        # 1.1 Extract multiplier digits
         digit_match = re.search(r'\b(\d+(?:\.\d+)?)\b', query_lower)
         if digit_match:
             try:
@@ -1131,91 +1235,67 @@ def analyze_food(payload: AnalyzeFoodRequest):
             except ValueError:
                 multiplier = 1.0
         else:
-            # Check for number words
             for word, val in NUMBER_MAP.items():
                 if re.search(r'\b' + word + r'\b', query_lower):
                     multiplier = float(val)
                     break
                     
-        # 1.2 Extract core food item name
         core_food = query_lower
         fillers = [
-            "i ate", "i had", "i have had", "today", "for breakfast", "for lunch", 
-            "for dinner", "for snack", "yesterday", "tonight", "ate", "had", "eating",
-            "pieces of", "piece of", "slice of", "slices of", "bowl of", "bowls of", 
-            "plate of", "cups of", "cup of", "glass of", "glasses of", "some", "few"
+            "i ate", "i had", "i have had", "this morning", "in the morning", "in the afternoon",
+            "in the evening", "at night", "for breakfast", "for lunch", "for dinner", "for snack",
+            "yesterday", "tonight", "today", "ate", "had", "eating", "pieces of", "piece of", 
+            "slice of", "slices of", "bowl of", "bowls of", "plate of", "plates of", 
+            "cups of", "cup of", "glass of", "glasses of", "some", "few"
         ]
         for filler in fillers:
             core_food = core_food.replace(filler, " ")
             
-        # Scrub quantity numbers
         core_food = re.sub(r'\b\d+(?:\.\d+)?\b', ' ', core_food)
         for word in NUMBER_MAP.keys():
             core_food = re.sub(r'\b' + word + r'\b', ' ', core_food)
             
         core_food = re.sub(r'\s+', ' ', core_food).strip()
-        
-        # Strip trailing plural 's'
         if core_food.endswith("s") and not core_food.endswith("ss") and not core_food.endswith("ce") and not core_food.endswith("us"):
             core_food = core_food[:-1]
             
         if not core_food:
             core_food = raw_item.strip()
             
-        # 1.3 Fetch nutrients for this portion
         usda_data = fetch_usda_nutrients(core_food)
-        
-        item_calories = 0
-        item_protein = 0
-        item_carbs = 0
-        item_fat = 0
-        item_desc = core_food
         
         if usda_data:
             item_calories = int(usda_data["calories"] * multiplier)
-            item_protein = int(usda_data["protein"] * multiplier)
-            item_carbs = int(usda_data["carbs"] * multiplier)
-            item_fat = int(usda_data["fat"] * multiplier)
+            item_protein = round(usda_data["protein"] * multiplier, 1)
+            item_carbs = round(usda_data["carbs"] * multiplier, 1)
+            item_fat = round(usda_data["fat"] * multiplier, 1)
             item_desc = usda_data["description"]
         else:
-            # Offline Fallback estimations scaled by multiplier
-            f_lower = core_food.lower()
-            if "pizza" in f_lower:
-                base_cal, base_prot, base_carb, base_fat = 680, 24, 72, 32
-            elif "burger" in f_lower or "cheeseburger" in f_lower:
-                base_cal, base_prot, base_carb, base_fat = 550, 28, 40, 28
-            elif "salad" in f_lower or "chicken breast" in f_lower or "fish" in f_lower:
-                base_cal, base_prot, base_carb, base_fat = 290, 34, 10, 8
-            elif "apple" in f_lower or "banana" in f_lower or "fruit" in f_lower:
-                base_cal, base_prot, base_carb, base_fat = 95, 1, 23, 0
-            elif "rice" in f_lower:
-                base_cal, base_prot, base_carb, base_fat = 130, 3, 28, 0
-            elif "sambhar" in f_lower or "sambar" in f_lower or "curry" in f_lower:
-                base_cal, base_prot, base_carb, base_fat = 120, 4, 15, 5
-            else:
-                base_cal, base_prot, base_carb, base_fat = 200, 8, 25, 6
-                
+            base_cal, base_prot, base_carb, base_fat = 150, 5.0, 20.0, 4.0
+            matched_name = core_food
+            for keys, (c, p, carb, f) in FOOD_BASELINES:
+                if any(k in core_food for k in keys):
+                    base_cal, base_prot, base_carb, base_fat = c, p, carb, f
+                    matched_name = keys[0]
+                    break
+                    
             item_calories = int(base_cal * multiplier)
-            item_protein = int(base_prot * multiplier)
-            item_carbs = int(base_carb * multiplier)
-            item_fat = int(base_fat * multiplier)
-            item_desc = core_food
+            item_protein = round(base_prot * multiplier, 1)
+            item_carbs = round(base_carb * multiplier, 1)
+            item_fat = round(base_fat * multiplier, 1)
+            item_desc = matched_name
             
-        # Accumulate
         total_calories += item_calories
         total_protein += item_protein
         total_carbs += item_carbs
         total_fat += item_fat
         
-        # Record item name and calories for breakdown feedback
         qty_label = f"{multiplier}x " if multiplier != 1.0 else ""
         item_breakdowns.append(f"{qty_label}{item_desc.split(',')[0].strip()} ({item_calories} kcal)")
 
-    # 2. Score and Grade the aggregated values
     unified_desc = " + ".join(item_breakdowns)
-    grade, tips = calculate_grade_and_tips(total_calories, total_protein, total_carbs, total_fat, unified_desc)
+    grade, tips = calculate_grade_and_tips(total_calories, int(total_protein), int(total_carbs), int(total_fat), unified_desc)
     
-    # 3. Insert detailed breakdown lists into the tips for the user
     breakdown_msg = "Breakdown: " + " + ".join(item_breakdowns)
     tips.insert(0, breakdown_msg)
     
@@ -1224,9 +1304,9 @@ def analyze_food(payload: AnalyzeFoodRequest):
         
     return {
         "calories": total_calories,
-        "protein": total_protein,
-        "carbs": total_carbs,
-        "fat": total_fat,
+        "protein": round(total_protein, 1),
+        "carbs": round(total_carbs, 1),
+        "fat": round(total_fat, 1),
         "grade": grade,
         "tips": tips
     }

@@ -6,16 +6,23 @@
   <main class="dashboard-grid">
     <!-- Left: Food Analyzer Widget -->
     <section class="widget-section">
-      <div class="glass-card main-widget">
-        <div class="widget-header">
-          <span class="widget-icon">⚡</span>
-          <div>
-            <h2>What you ate today?</h2>
-            <p>Tell us about your meal or daily intake for high-fidelity nutritional breakdown.</p>
-          </div>
+      <div class="glass-card main-widget accordion-card" [class.open]="accordionService.activeTab() === 'meal'">
+        <div class="widget-header accordion-header" (click)="accordionService.setActiveTab('meal')" role="button" tabindex="0">
+          @if (accordionService.activeTab() === 'meal') {
+            <span class="widget-icon">🥗</span>
+            <div class="header-text-group">
+              <h2>What you ate today?</h2>
+              <p>Tell us about your meal or daily intake for high-fidelity nutritional breakdown.</p>
+            </div>
+            <span class="chevron">▲</span>
+          } @else {
+            <h2 class="collapsed-title">What you ate today?</h2>
+            <span class="chevron">▼</span>
+          }
         </div>
 
-        <div class="widget-body">
+        @if (accordionService.activeTab() === 'meal') {
+        <div class="widget-body accordion-body animate-fade-in">
           <div class="input-area">
             <!-- Media Preview Grid -->
             @if (previewItems().length > 0) {
@@ -109,6 +116,11 @@
               </div>
               }
 
+              <div class="disclaimer-banner">
+                ℹ️ <strong>Disclaimer:</strong> This food is verified against standard baseline nutrition values and
+                provides an estimated value rather than an exact micro-measurement.
+              </div>
+
               <div class="banner-actions">
                 <button type="button" class="btn btn-confirm-yes" (click)="confirmDetection()">Add this meal</button>
                 <button type="button" class="btn btn-confirm-no" (click)="dismissDetection()">No, Cancel</button>
@@ -201,35 +213,126 @@
           </div>
           }
         </div>
+        }
+      </div>
+
+      <!-- Physical Activity Widget -->
+      <div class="glass-card main-widget activity-widget accordion-card" [class.open]="accordionService.activeTab() === 'activity'" style="margin-top: 0.75rem;">
+        <div class="widget-header accordion-header" (click)="accordionService.setActiveTab('activity')" role="button" tabindex="0">
+          @if (accordionService.activeTab() === 'activity') {
+            <span class="widget-icon">🏃</span>
+            <div class="header-text-group">
+              <h2>Log Physical Activity</h2>
+              <p>Enter your workout or activity in plain language. AI will extract details & burn metrics.</p>
+            </div>
+            <span class="chevron">▲</span>
+          } @else {
+            <h2 class="collapsed-title">Log physical activity</h2>
+            <span class="chevron">▼</span>
+          }
+        </div>
+
+        @if (accordionService.activeTab() === 'activity') {
+        <div class="widget-body accordion-body animate-fade-in">
+          <div class="input-area">
+            <div class="textarea-container">
+              <textarea [(ngModel)]="activityInput"
+                placeholder="Describe your workout or physical activity (e.g. 'Ran 5 km in 30 mins', '45 min gym workout', '1 hr brisk walking')"
+                rows="2"></textarea>
+            </div>
+
+            <!-- Dynamic Suggestions -->
+            <div class="activity-suggestions">
+              <span class="suggestion-label">💡 Suggested Examples:</span>
+              <div class="suggestion-chips">
+                @for (sug of activitySuggestions(); track sug) {
+                <button type="button" class="chip-btn" (click)="applyActivitySuggestion(sug)">
+                  + {{ sug }}
+                </button>
+                }
+              </div>
+            </div>
+
+            <button class="btn btn-primary btn-activity" [disabled]="isActivityAnalyzing() || !activityInput().trim()"
+              (click)="onAnalyzeActivity()">
+              @if (isActivityAnalyzing()) {
+              <span class="small-spinner"></span> Extracting Activity Details...
+              } @else {
+              Analyze Activity <span class="arrow">→</span>
+              }
+            </button>
+          </div>
+
+          <!-- Activity Result Area -->
+          @if (showActivityResult() && activityBreakdown()) {
+          <div class="analysis-results activity-results animate-fade-in">
+            <div class="results-header">
+              <h3>Activity Summary</h3>
+              <span class="activity-badge">
+                {{ activityBreakdown()?.activity_type }}
+              </span>
+            </div>
+
+            <div class="metrics-grid">
+              <div class="metric-card calories">
+                <span class="metric-val">{{ activityBreakdown()?.calories_burned }} kcal</span>
+                <span class="metric-label">CALORIES BURNED</span>
+              </div>
+              <div class="metric-card duration">
+                <span class="metric-val">{{ activityBreakdown()?.duration_minutes }} mins</span>
+                <span class="metric-label">DURATION</span>
+              </div>
+              <div class="metric-card intensity">
+                <span class="metric-val">{{ activityBreakdown()?.intensity }}</span>
+                <span class="metric-label">INTENSITY LEVEL</span>
+              </div>
+            </div>
+
+            @if (activityBreakdown()?.tasks && activityBreakdown()!.tasks!.length > 0) {
+            <div class="tasks-breakdown-section">
+              <h4>📋 Task-wise Energy Breakdown</h4>
+              <div class="task-items-grid">
+                @for (taskItem of activityBreakdown()?.tasks; track taskItem.task) {
+                <div class="task-item-card">
+                  <div class="task-info">
+                    <span class="task-title">{{ taskItem.task }}</span>
+                    @if (taskItem.details) {
+                      <span class="task-details">{{ taskItem.details }}</span>
+                    }
+                  </div>
+                  <span class="task-cals">- {{ taskItem.calories_burned }} kcal</span>
+                </div>
+                }
+              </div>
+              <p class="task-guidance-note">
+                💡 Understanding task-wise expenditure reveals which sub-exercises burned the most calories, helping you optimize what to target in your next session!
+              </p>
+            </div>
+            }
+
+            <div class="tips-section">
+              <h4>Activity Tips & Guidance</h4>
+              <ul>
+                @for (tip of activityBreakdown()?.tips; track tip) {
+                <li>
+                  <span class="tip-bullet">🔥</span>
+                  <span>{{ tip }}</span>
+                </li>
+                }
+              </ul>
+            </div>
+
+            <div class="results-actions">
+              <button type="button" class="btn btn-secondary btn-log-meal" (click)="openActivityLogModal()">
+                📋 Log this activity
+              </button>
+            </div>
+          </div>
+          }
+        </div>
+        }
       </div>
     </section>
-
-    <!-- Right: User Profile Sidebar -->
-    <aside class="sidebar-section">
-      <div class="glass-card profile-card">
-        <div class="profile-avatar">
-          <span class="avatar-emoji">🥗</span>
-        </div>
-        <h2 class="profile-name">{{ userName() }}</h2>
-        <span class="profile-email">{{ userEmail() }}</span>
-
-        <hr class="divider" />
-
-        <div class="profile-bio-section">
-          <h3>Your Wellness Goals</h3>
-          <p class="profile-bio">{{ userBio() || 'No description provided.' }}</p>
-        </div>
-
-        <div class="profile-footer-actions">
-          <div class="status-badge">
-            <span class="status-icon">🛡️</span> Verified Member
-          </div>
-          <button type="button" class="btn btn-add-details" (click)="openDetailsModal()">
-            ➕ Add More Details
-          </button>
-        </div>
-      </div>
-    </aside>
   </main>
 
   <!-- Log Meal Modal -->
@@ -400,4 +503,42 @@
       </button>
     </div>
   </app-modal>
+
+  <!-- Log Activity Modal -->
+  <app-modal [title]="'Log this activity?'" [(isOpen)]="isActivityLogModalOpen">
+    <div body class="log-meal-modal-body">
+      <div class="log-section">
+        <label class="section-label">Activity Description</label>
+        <div class="log-meal-description">
+          {{ activityInput() || '(No activity text)' }}
+        </div>
+      </div>
+
+      <div class="log-section">
+        <label class="section-label" for="act-time-picker">Date & Time</label>
+        <input id="act-time-picker" type="datetime-local" class="form-control log-time-input"
+          [(ngModel)]="activityLogDateTime" />
+      </div>
+    </div>
+
+    <div footer class="log-meal-modal-footer">
+      <button type="button" class="btn btn-cancel" (click)="isActivityLogModalOpen.set(false)">Cancel</button>
+      <button type="button" class="btn btn-confirm" (click)="confirmLogActivity()">Confirm Log</button>
+    </div>
+  </app-modal>
+
+  <!-- Activity Success Modal -->
+  <app-modal [(isOpen)]="isActivitySuccessModalOpen" [title]="'Activity Logged'">
+    <div body class="success-modal-body">
+      <div class="success-icon">🏃</div>
+      <p class="success-text">Your physical activity has been logged successfully to your daily logs.</p>
+    </div>
+    <div footer class="success-modal-footer">
+      <button type="button" class="btn btn-confirm" (click)="isActivitySuccessModalOpen.set(false)">Close</button>
+    </div>
+  </app-modal>
+
+  <!-- Global Hidden File & Voice Inputs for Modals -->
+  <input #fileInput type="file" (change)="onImageSelected($event)" accept="image/*" style="display: none;" />
+  <input #voiceFileInput type="file" (change)="onVoiceSelected($event)" accept="audio/*" style="display: none;" />
 </div>

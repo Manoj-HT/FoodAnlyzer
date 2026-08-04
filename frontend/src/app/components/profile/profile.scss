@@ -1,0 +1,340 @@
+.profile-page-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f3f8f5 0%, #e6efe7 50%, #d8ebd9 100%);
+  font-family: 'Inter', sans-serif;
+  box-sizing: border-box;
+}
+
+.profile-content {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 40px 20px 100px 20px;
+}
+
+.profile-header-section {
+  margin-bottom: 30px;
+
+  h2 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #111827;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.5px;
+  }
+
+  .subtitle {
+    font-size: 1.05rem;
+    color: #4b5563;
+    margin: 0;
+  }
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 12px 36px rgba(44, 76, 56, 0.05);
+}
+
+.profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+
+  .avatar-wrapper {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: rgba(44, 76, 56, 0.08);
+    border: 3px solid rgba(44, 76, 56, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 8px 24px rgba(44, 76, 56, 0.12);
+
+    .avatar-emoji {
+      font-size: 2.8rem;
+    }
+
+    .online-indicator {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #10b981;
+      border: 2.5px solid #ffffff;
+    }
+  }
+
+  .user-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    .user-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #111827;
+      margin: 0;
+    }
+
+    .user-email {
+      font-size: 0.95rem;
+      color: #4b5563;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: rgba(44, 76, 56, 0.08);
+      border: 1px solid rgba(44, 76, 56, 0.15);
+      border-radius: 9999px;
+      font-size: 0.78rem;
+      color: #2c4c38;
+      font-weight: 700;
+
+      &.sync-badge {
+        background: rgba(59, 130, 246, 0.08);
+        border-color: rgba(59, 130, 246, 0.15);
+        color: #1d4ed8;
+      }
+    }
+  }
+}
+
+.card-divider {
+  border: none;
+  border-top: 1px solid rgba(44, 76, 56, 0.08);
+  margin: 28px 0;
+}
+
+.details-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #111827;
+      margin: 0;
+    }
+  }
+
+  .btn-edit {
+    background: transparent;
+    border: 1.5px solid #2c4c38;
+    color: #2c4c38;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: #2c4c38;
+      color: #ffffff;
+    }
+  }
+
+  .bio-display-box {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(44, 76, 56, 0.12);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
+
+    .user-bio-text {
+      font-size: 0.95rem;
+      color: #374151;
+      line-height: 1.6;
+      margin: 0;
+      white-space: pre-line;
+    }
+  }
+}
+
+.account-actions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  h3 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+  }
+
+  .actions-desc {
+    font-size: 0.9rem;
+    color: #6b7280;
+    margin: 0;
+  }
+
+  .actions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-top: 8px;
+
+    @media (max-width: 600px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .btn-action {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    border-radius: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: #ffffff;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+    .btn-icon {
+      font-size: 1.6rem;
+      line-height: 1;
+    }
+
+    .btn-text-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+
+      strong {
+        font-size: 0.95rem;
+        color: #111827;
+      }
+
+      span {
+        font-size: 0.78rem;
+        color: #6b7280;
+      }
+    }
+
+    &.btn-export:hover {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.15);
+    }
+
+    &.btn-logout:hover {
+      background: #fef2f2;
+      border-color: #fecaca;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.15);
+    }
+  }
+}
+
+// Modal inputs & spinners
+.details-modal-body {
+  font-family: 'Inter', sans-serif;
+
+  .details-modal-desc {
+    font-size: 0.9rem;
+    color: #4b5563;
+    margin-bottom: 14px;
+  }
+
+  .textarea-container {
+    textarea {
+      width: 100%;
+      border: 1px solid rgba(44, 76, 56, 0.2);
+      border-radius: 12px;
+      padding: 14px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.92rem;
+      outline: none;
+      box-sizing: border-box;
+
+      &:focus {
+        border-color: #2c4c38;
+        box-shadow: 0 0 0 3px rgba(44, 76, 56, 0.12);
+      }
+    }
+  }
+}
+
+.details-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+
+  .btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn-cancel {
+    background: transparent;
+    border: 1px solid #d1d5db;
+    color: #374151;
+  }
+
+  .btn-primary {
+    background: #2c4c38;
+    color: white;
+    border: none;
+  }
+}
+
+.small-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 600px) {
+  .profile-hero {
+    flex-direction: column;
+    text-align: center;
+
+    .badge-row {
+      justify-content: center;
+    }
+  }
+}

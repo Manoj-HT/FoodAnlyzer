@@ -1,0 +1,204 @@
+<div class="day-page-wrapper">
+  <!-- Top Navigation Header -->
+  <app-navigation></app-navigation>
+
+  <main class="day-overview-content">
+    <div class="container">
+      <!-- Top Action Bar & Page Title -->
+      <div class="header-action-bar">
+        <button type="button" class="btn-back" (click)="goBackToLogs()">
+          ← Back to Weekly Journal
+        </button>
+
+        <div class="page-title-group">
+          <h2>📅 {{ formattedDateLabel() || dateParam() }}</h2>
+          <p class="subtitle">Complete daily nutritional breakdown & exercise logs overview</p>
+        </div>
+
+        <button type="button" class="btn btn-primary btn-add-log" (click)="goToLogActivityOrMeal()">
+          + Log Food / Activity
+        </button>
+      </div>
+
+      @if (isLoading()) {
+        <div class="loading-state glass-card">
+          <div class="spinner"></div>
+          <p>Loading full day overview & activity metrics...</p>
+        </div>
+      } @else if (dayData()) {
+        <!-- Macro & Caloric Summary Banner Grid -->
+        <section class="summary-hero-section">
+          <div class="summary-hero-card glass-card net-balance">
+            <div class="card-icon">⚡</div>
+            <div class="hero-metric">
+              <span class="value" [class.negative]="(dayData()?.summary?.net_calories || 0) < 0">
+                {{ dayData()?.summary?.net_calories || 0 }} kcal
+              </span>
+              <span class="label">NET CALORIC BALANCE</span>
+            </div>
+            <p class="meta-desc">Consumed ({{ dayData()?.summary?.calories_consumed }} kcal) − Burned ({{ dayData()?.summary?.calories_burned }} kcal)</p>
+          </div>
+
+          <div class="summary-hero-card glass-card consumed">
+            <div class="card-icon">🥗</div>
+            <div class="hero-metric">
+              <span class="value">{{ dayData()?.summary?.calories_consumed || 0 }} kcal</span>
+              <span class="label">FOOD INTAKE</span>
+            </div>
+            <span class="pill-badge">{{ dayData()?.meals?.length || 0 }} meals logged</span>
+          </div>
+
+          <div class="summary-hero-card glass-card burned">
+            <div class="card-icon">🔥</div>
+            <div class="hero-metric">
+              <span class="value">{{ dayData()?.summary?.calories_burned || 0 }} kcal</span>
+              <span class="label">PHYSICAL BURN</span>
+            </div>
+            <span class="pill-badge burn">{{ dayData()?.activities?.length || 0 }} activities</span>
+          </div>
+
+          <div class="summary-hero-card glass-card macros">
+            <div class="card-icon">🥩</div>
+            <div class="hero-metric">
+              <span class="value">{{ dayData()?.summary?.protein || 0 }}g</span>
+              <span class="label">TOTAL PROTEIN</span>
+            </div>
+            <div class="mini-macro-pills">
+              <span class="m-pill carb">🍞 Carbs: {{ dayData()?.summary?.carbs || 0 }}g</span>
+              <span class="m-pill fat">🥑 Fat: {{ dayData()?.summary?.fat || 0 }}g</span>
+            </div>
+          </div>
+        </section>
+
+        <div class="details-two-column-layout">
+          <!-- Left Column: Meals Logged -->
+          <section class="details-section meals-section">
+            <div class="section-header">
+              <div class="header-title">
+                <span class="sec-emoji">🥗</span>
+                <h3>Meals Eaten ({{ dayData()?.meals?.length || 0 }})</h3>
+              </div>
+              <span class="sec-subtitle">Nutritional breakdown for every logged dish</span>
+            </div>
+
+            <div class="meals-list">
+              @for (m of dayData()?.meals; track m.id) {
+                <div class="glass-card meal-detail-card">
+                  <div class="card-top">
+                    <div class="meal-main-info">
+                      <h4 class="meal-title">{{ m.description }}</h4>
+                      <span class="meal-time">🕒 Logged at {{ formatTime(m.time) }}</span>
+                    </div>
+                    @if (m.report?.grade) {
+                      <span class="grade-badge" [attr.data-grade]="m.report?.grade">
+                        Grade {{ m.report?.grade }}
+                      </span>
+                    }
+                  </div>
+
+                  <div class="macros-grid">
+                    <div class="macro-item cal">
+                      <span class="m-val">{{ m.report?.calories || 0 }} kcal</span>
+                      <span class="m-lbl">Energy</span>
+                    </div>
+                    <div class="macro-item prot">
+                      <span class="m-val">{{ m.report?.protein || 0 }}g</span>
+                      <span class="m-lbl">Protein</span>
+                    </div>
+                    <div class="macro-item carb">
+                      <span class="m-val">{{ m.report?.carbs || 0 }}g</span>
+                      <span class="m-lbl">Carbs</span>
+                    </div>
+                    <div class="macro-item fat">
+                      <span class="m-val">{{ m.report?.fat || 0 }}g</span>
+                      <span class="m-lbl">Fat</span>
+                    </div>
+                  </div>
+                </div>
+              } @empty {
+                <div class="glass-card empty-card">
+                  <span class="empty-emoji">🥣</span>
+                  <p>No meals logged for this date yet.</p>
+                  <button type="button" class="btn btn-outline" (click)="goToLogActivityOrMeal()">+ Log A Meal</button>
+                </div>
+              }
+            </div>
+          </section>
+
+          <!-- Right Column: Physical Activity & Task Breakdown -->
+          <section class="details-section activities-section">
+            <div class="section-header">
+              <div class="header-title">
+                <span class="sec-emoji">🏃</span>
+                <h3>Physical Activities ({{ dayData()?.activities?.length || 0 }})</h3>
+              </div>
+              <span class="sec-subtitle">Task-wise exercise breakdown & calorie expenditure</span>
+            </div>
+
+            <div class="activities-list">
+              @for (a of dayData()?.activities; track a.id) {
+                <div class="glass-card activity-detail-card">
+                  <div class="card-top">
+                    <div class="act-main-info">
+                      <h4 class="act-title">{{ a.description }}</h4>
+                      <span class="act-time">🕒 Logged at {{ formatTime(a.time) }} • {{ a.report?.activity_type }}</span>
+                    </div>
+                    <span class="intensity-badge">{{ a.report?.intensity || 'Moderate' }}</span>
+                  </div>
+
+                  <div class="act-metrics-row">
+                    <div class="act-metric burn">
+                      <span class="val">🔥 {{ a.report?.calories_burned || 0 }} kcal</span>
+                      <span class="lbl">TOTAL BURN</span>
+                    </div>
+                    <div class="act-metric dur">
+                      <span class="val">⏱️ {{ a.report?.duration_minutes || 0 }} mins</span>
+                      <span class="lbl">DURATION</span>
+                    </div>
+                  </div>
+
+                  <!-- Task-wise Breakdown inside activity item -->
+                  @if (a.report?.tasks && a.report.tasks.length > 0) {
+                    <div class="task-breakdown-card">
+                      <h5 class="task-breakdown-title">📋 Task-wise Energy Breakdown</h5>
+                      <div class="tasks-grid">
+                        @for (t of a.report.tasks; track t.task) {
+                          <div class="task-row-item">
+                            <div class="t-left">
+                              <span class="t-name">{{ t.task }}</span>
+                              @if (t.details) {
+                                <span class="t-details">({{ t.details }})</span>
+                              }
+                            </div>
+                            <span class="t-burn">- {{ t.calories_burned }} kcal</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  @if (a.report?.tips && a.report.tips.length > 0) {
+                    <div class="activity-tips">
+                      <h5>💡 Recovery & Health Tips</h5>
+                      <ul>
+                        @for (tip of a.report.tips; track tip) {
+                          <li>{{ tip }}</li>
+                        }
+                      </ul>
+                    </div>
+                  }
+                </div>
+              } @empty {
+                <div class="glass-card empty-card">
+                  <span class="empty-emoji">🧘</span>
+                  <p>No physical activity logged for this date yet.</p>
+                  <button type="button" class="btn btn-outline" (click)="goToLogActivityOrMeal()">+ Log Physical Activity</button>
+                </div>
+              }
+            </div>
+          </section>
+        </div>
+      }
+    </div>
+  </main>
+</div>

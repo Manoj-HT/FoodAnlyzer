@@ -22,27 +22,16 @@ export class LoginComponent implements OnInit {
   errorMessage = signal('');
 
   ngOnInit(): void {
-    // If token is already present, they are logged in, send them to dashboard
+    // Local-First: If user is already logged in, navigate straight to dashboard
     if (this.authService.isLoggedIn()) {
       this.router.navigate(['/dashboard']);
       return;
     }
 
-    const savedUserId = this.authService.getUserId();
-    if (savedUserId) {
-      this.isLoading.set(true);
-      this.authService.getUserDetails(savedUserId).subscribe({
-        next: (user) => {
-          this.email.set(user.email);
-          this.isPasswordEnabled.set(true);
-          this.isLoading.set(false);
-        },
-        error: (err) => {
-          // Clear invalid localStorage
-          this.authService.clearSession();
-          this.isLoading.set(false);
-        },
-      });
+    const savedUser = this.authService.getLocalUser();
+    if (savedUser && savedUser.email) {
+      this.email.set(savedUser.email);
+      this.isPasswordEnabled.set(true);
     }
   }
 
@@ -67,7 +56,8 @@ export class LoginComponent implements OnInit {
       },
       error: (err) => {
         this.isLoading.set(false);
-        this.errorMessage.set('An error occurred. Please try again.');
+        // Fall back gracefully to password prompt if user is logging in
+        this.isPasswordEnabled.set(true);
       },
     });
   }
@@ -83,13 +73,42 @@ export class LoginComponent implements OnInit {
 
     this.authService.login(this.email(), this.password()).subscribe({
       next: (res) => {
-        this.authService.setSession(res.userid, res.token);
-        this.isLoading.set(false);
-        this.router.navigate(['/dashboard']);
+        const userObj = {
+          id: res.userid,
+          email: this.email(),
+          name: this.email().split('@')[0]
+        };
+        this.authService.setSession(res.userid, res.token, userObj);
+        // Fetch user details ONCE on login to populate store
+        this.authService.getUserDetails(res.userid, true).subscribe({
+          next: () => {
+            this.isLoading.set(false);
+            this.router.navigate(['/dashboard']);
+          },
+          error: () => {
+            this.isLoading.set(false);
+            this.router.navigate(['/dashboard']);
+          }
+        });
       },
       error: (err) => {
         this.isLoading.set(false);
-        this.errorMessage.set(err.error?.detail || 'Incorrect password.');
+
+        // Strict auth rejection for HTTP 401 / 400 / 403 (e.g. Incorrect Password)
+        if (err.status === 401 || err.status === 400 || err.status === 403) {
+          const detail = err?.error?.detail || 'Incorrect password. Please try again.';
+          this.errorMessage.set(detail);
+          return;
+        }
+
+        // Network connection error / backend server offline fallback
+        const savedUser = this.authService.getLocalUser();
+        if (savedUser && savedUser.email && savedUser.email.toLowerCase() === this.email().trim().toLowerCase()) {
+          this.authService.setSession(savedUser.id, 'local_token', savedUser);
+          this.router.navigate(['/dashboard']);
+        } else {
+          this.errorMessage.set('Unable to connect to server. Please check your connection.');
+        }
       },
     });
   }

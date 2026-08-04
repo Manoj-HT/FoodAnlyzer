@@ -158,6 +158,30 @@
         </div>
       </div>
 
+      <!-- Physical Activity Summary Card -->
+      <div class="snapshot-card glass-card">
+        <div class="card-inner-header">
+          <span class="small-emoji">🏋️‍♂️</span>
+          <h5>Physical Activity</h5>
+        </div>
+        <div class="metric-block">
+          <span class="metric-value">{{ monthlyData().monthly_average_calories_burned || 0 }} <span
+              class="metric-unit">kcal/day</span></span>
+          <span class="metric-label">Daily Avg. Burn</span>
+        </div>
+        <div class="sub-metrics">
+          <div class="sub-metric">
+            <span class="sub-value">{{ monthlyData().total_activities_logged || 0 }}</span>
+            <span class="sub-label">Workouts</span>
+          </div>
+          <div class="sub-divider"></div>
+          <div class="sub-metric">
+            <span class="sub-value">{{ monthlyData().net_daily_calories || 0 }} kcal</span>
+            <span class="sub-label">Net Daily</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Top Consumed Foods Card -->
       <div class="snapshot-card glass-card full-row-mobile">
         <div class="card-inner-header">
@@ -221,6 +245,14 @@
             <span class="val">{{ report.weekly_average_calories }} kcal</span>
           </div>
           <div class="stat-row">
+            <span class="label">Avg daily burn:</span>
+            <span class="val">{{ report.weekly_average_calories_burned || 0 }} kcal</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">Workouts logged:</span>
+            <span class="val">{{ report.total_activities_logged || 0 }}</span>
+          </div>
+          <div class="stat-row">
             <span class="label">Macros (P/C/F):</span>
             <span class="val">{{ report.weekly_average_nutrition.average_protein }}g / {{
               report.weekly_average_nutrition.average_carbs }}g / {{ report.weekly_average_nutrition.average_fat
@@ -236,6 +268,45 @@
       }
     </div>
     }
+    <!-- "See how you are doing" Analytics Section -->
+    <h3 class="section-title">📈 See how you are doing</h3>
+    <div class="analytics-card glass-card">
+      <div class="analytics-controls">
+        <div class="control-group">
+          <label for="metricSelect">Metric:</label>
+          <select id="metricSelect" class="analytics-select" [ngModel]="selectedMetric()" (ngModelChange)="onMetricChange($event)">
+            <option value="all">📊 All Metrics (Comparison View)</option>
+            <option value="calories_burned">🔥 Calories Burned</option>
+            <option value="protein">🥩 Protein Intake (g)</option>
+            <option value="fibre">🌾 Fibre Intake (g)</option>
+            <option value="carbs">🍞 Carb Intake (g)</option>
+            <option value="vitamins">⚡ Vitamin Intake Score</option>
+          </select>
+        </div>
+
+        <div class="timeframe-tabs">
+          <button type="button" class="tab-btn" [class.active]="selectedTimeframe() === 'daily'" (click)="onTimeframeChange('daily')">
+            Daily (This Month)
+          </button>
+          <button type="button" class="tab-btn" [class.active]="selectedTimeframe() === 'weekly'" (click)="onTimeframeChange('weekly')">
+            Weekly (This Month)
+          </button>
+          <button type="button" class="tab-btn" [class.active]="selectedTimeframe() === 'monthly'" (click)="onTimeframeChange('monthly')">
+            Monthly (This Year)
+          </button>
+        </div>
+      </div>
+
+      <div class="chart-canvas-container">
+        @if (isGraphLoading()) {
+          <div class="loader-container chart-loader">
+            <div class="spinner"></div>
+            <p>Rendering analytics graph...</p>
+          </div>
+        }
+        <canvas #analyticsCanvas></canvas>
+      </div>
+    </div>
 
     <!-- Baseline Guidelines (Existing Cards) -->
     <h3 class="section-title">📋 Baseline Health Guidelines</h3>

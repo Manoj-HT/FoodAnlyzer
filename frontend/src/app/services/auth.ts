@@ -1,6 +1,6 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, of, tap } from 'rxjs';
 
 export interface User {
   id: string;
@@ -42,19 +42,44 @@ export class AuthService {
     if (customUrl) {
       return customUrl.endsWith('/') ? customUrl.slice(0, -1) : customUrl;
     }
-    return 'https://foodanalyzer-backend.onrender.com/api';
+    return 'https://foodanalyzer-backend-sgh5.onrender.com/api';
   }
 
   setBackendUrl(url: string): void {
     localStorage.setItem('API_URL', url);
   }
 
+  currentUser = signal<User | null>(this.getLocalUser());
+  private userDetailsObservable: Observable<User> | null = null;
+
   checkEmail(email: string): Observable<CheckEmailResponse> {
     return this.http.post<CheckEmailResponse>(`${this.apiUrl}/users/check`, { email });
   }
 
-  getUserDetails(userid: string): Observable<User> {
-    return this.http.get<User>(`${this.apiUrl}/users/${userid}`);
+  getUserDetails(userid: string, forceRefresh = false): Observable<User> {
+    const cached = this.currentUser();
+    if (!forceRefresh && cached && cached.id === userid) {
+      return of(cached);
+    }
+
+    if (this.userDetailsObservable && !forceRefresh) {
+      return this.userDetailsObservable;
+    }
+
+    this.userDetailsObservable = this.http.get<User>(`${this.apiUrl}/users/${userid}`).pipe(
+      tap({
+        next: (user) => {
+          this.currentUser.set(user);
+          this.saveLocalUser(user);
+          this.userDetailsObservable = null;
+        },
+        error: () => {
+          this.userDetailsObservable = null;
+        },
+      })
+    );
+
+    return this.userDetailsObservable;
   }
 
   login(email: string, password: string): Observable<LoginResponse> {
@@ -87,6 +112,15 @@ export class AuthService {
     return this.http.post<any>(`${this.apiUrl}/users/${userid}/logs`, payload);
   }
 
+  getUnifiedLogs(userid: string, weekOffset: number = 0): Observable<{
+    food_logs: any[];
+    activity_logs: any[];
+    inferred_logs: any[];
+    low_data: boolean;
+  }> {
+    return this.http.get<any>(`${this.apiUrl}/users/${userid}/unified-logs?week_offset=${weekOffset}`);
+  }
+
   getMealLogs(userid: string, weekOffset: number = 0): Observable<any[]> {
     return this.http.get<any[]>(`${this.apiUrl}/users/${userid}/logs?week_offset=${weekOffset}`);
   }
@@ -112,7 +146,17 @@ export class AuthService {
 
   transcribeAudio(file: File | Blob): Observable<{ text: string }> {
     const formData = new FormData();
-    formData.append('file', file, file instanceof File ? file.name : 'audio.wav');
+    let filename = 'audio.wav';
+    if (file instanceof File) {
+      filename = file.name;
+    } else {
+      const type = file.type || 'audio/webm';
+      if (type.includes('webm')) filename = 'audio.webm';
+      else if (type.includes('mp4') || type.includes('m4a')) filename = 'audio.m4a';
+      else if (type.includes('ogg')) filename = 'audio.ogg';
+      else if (type.includes('3gpp')) filename = 'audio.3gp';
+    }
+    formData.append('file', file, filename);
     return this.http.post<{ text: string }>(`${this.apiUrl}/users/transcribe`, formData);
   }
 
@@ -150,10 +194,38 @@ export class AuthService {
     return this.http.get<any>(`${this.apiUrl}/users/${userid}/graph-data`);
   }
 
-  // LocalStorage Helpers
-  setSession(userid: string, token: string): void {
+  // LocalStorage & Offline Local-First Profile Helpers
+  setSession(userid: string, token: string, user?: User): void {
     localStorage.setItem('userid', userid);
     localStorage.setItem('token', token);
+    if (user) {
+      this.saveLocalUser(user);
+    }
+  }
+
+  saveLocalUser(user: User): void {
+    try {
+      localStorage.setItem('user_profile', JSON.stringify(user));
+      this.currentUser.set(user);
+    } catch (e) {
+      console.error('Failed to save local user profile:', e);
+    }
+  }
+
+  getLocalUser(): User | null {
+    try {
+      const data = localStorage.getItem('user_profile');
+      if (data) {
+        return JSON.parse(data) as User;
+      }
+    } catch (e) {
+      console.error('Failed to parse local user profile:', e);
+    }
+    const uid = this.getUserId();
+    if (uid) {
+      return { id: uid, email: 'user@local.app', name: 'Member' };
+    }
+    return null;
   }
 
   getUserId(): string | null {
@@ -165,15 +237,19 @@ export class AuthService {
   }
 
   isLoggedIn(): boolean {
-    return !!this.getToken();
+    return !!this.getUserId();
   }
 
   logout(): void {
     localStorage.removeItem('token');
+    localStorage.removeItem('user_profile');
+    this.currentUser.set(null);
   }
 
   clearSession(): void {
     localStorage.removeItem('userid');
     localStorage.removeItem('token');
+    localStorage.removeItem('user_profile');
+    this.currentUser.set(null);
   }
 }

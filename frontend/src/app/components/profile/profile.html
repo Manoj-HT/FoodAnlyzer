@@ -1,0 +1,97 @@
+<div class="profile-page-container">
+  <!-- Navigation Header -->
+  <app-navigation></app-navigation>
+
+  <main class="profile-content">
+    <div class="profile-header-section">
+      <h2>Member Profile</h2>
+      <p class="subtitle">Manage your account details, health goals, and data backup</p>
+    </div>
+
+    <!-- Main Profile Card -->
+    <div class="glass-card profile-main-card">
+      <div class="profile-hero">
+        <div class="avatar-wrapper">
+          <span class="avatar-emoji">⚡</span>
+          <span class="online-indicator"></span>
+        </div>
+        <div class="user-meta">
+          <h1 class="user-name">{{ userName() }}</h1>
+          <span class="user-email">✉️ {{ userEmail() }}</span>
+          <div class="badge-row">
+            <span class="status-badge">🛡️ Verified Member</span>
+            <span class="status-badge sync-badge">☁️ Cloud Synced</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="card-divider" />
+
+      <!-- Member Details & Wellness Goals -->
+      <div class="details-section">
+        <div class="section-header">
+          <h3>📋 Your Member Details & Health Preferences</h3>
+          <button type="button" class="btn btn-outline btn-edit" (click)="openDetailsModal()">
+            ✏️ Update Details
+          </button>
+        </div>
+
+        <div class="bio-display-box">
+          <p class="user-bio-text">{{ userBio() || 'No detailed wellness goals provided yet. Click Update Details to add your preferences!' }}</p>
+        </div>
+      </div>
+
+      <hr class="card-divider" />
+
+      <!-- Account Actions Section -->
+      <div class="account-actions-section">
+        <h3>⚙️ Account & Data Management</h3>
+        <p class="actions-desc">Export your local IndexedDB backup or safely sign out of your account.</p>
+
+        <div class="actions-grid">
+          <button type="button" class="btn btn-action btn-export" (click)="exportData()">
+            <span class="btn-icon">💾</span>
+            <div class="btn-text-block">
+              <strong>Export Health Backup</strong>
+              <span>Download 9-month compressed JSON data</span>
+            </div>
+          </button>
+
+          <button type="button" class="btn btn-action btn-logout" (click)="onLogout()">
+            <span class="btn-icon">🚪</span>
+            <div class="btn-text-block">
+              <strong>Log Out</strong>
+              <span>Safely sign out from this device</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add/Update Profile Details Modal -->
+  <app-modal [title]="'Update Member Details'" [(isOpen)]="isDetailsModalOpen">
+    <div body class="details-modal-body">
+      <p class="details-modal-desc">
+        Update your physical stats, food preferences, or health goals to keep your AI recommendations personalized.
+      </p>
+
+      <div class="textarea-container">
+        <textarea [(ngModel)]="additionalDetailsInput"
+          [placeholder]="detailsPlaceholderText() || 'Share diet goals, allergies, or activity targets...'" rows="4"></textarea>
+      </div>
+    </div>
+
+    <div footer class="details-modal-footer">
+      <button type="button" class="btn btn-cancel" (click)="isDetailsModalOpen.set(false)">Cancel</button>
+      <button type="button" class="btn btn-primary" [disabled]="isUpdatingDetails() || !additionalDetailsInput().trim()"
+        (click)="submitAdditionalDetails()">
+        @if (isUpdatingDetails()) {
+          <span class="small-spinner"></span> Updating...
+        } @else {
+          Save Changes
+        }
+      </button>
+    </div>
+  </app-modal>
+</div>

@@ -1,8 +1,16 @@
-# Compiled output
+# Compiled output & dist
 /dist
+**/dist/
 /tmp
 /out-tsc
 /bazel-out
+
+# Android / Capacitor native build outputs
+android/
+**/android/
+*.apk
+build-apk.sh
+**/build-apk.sh
 
 # Dependency directories
 node_modules/
@@ -23,6 +31,17 @@ __pycache__/
 **/__pycache__/
 *.py[cod]
 *$py.class
+
+# Local database JSON state files in backend
+backend/*.json
+!backend/sample*.json
+
+# Documents / Latex build artifacts
+Documents/
+*.aux
+*.bbl
+*.blg
+*.out
 
 # Logs
 *.log
@@ -60,7 +79,8 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 
-# prompts
-prompts/
+# Secrets
+apikey.md
+*.key
 
 train/

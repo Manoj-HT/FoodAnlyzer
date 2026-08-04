@@ -1,0 +1,20 @@
+@if (serverStatus.isColdStarting()) {
+  <div class="cold-start-overlay">
+    <div class="cold-start-card">
+      <div class="spinner-container">
+        <div class="pulse-ring"></div>
+        <div class="cloud-icon">🔥</div>
+      </div>
+
+      <h3 class="modal-title">Warming Up Your Nutrition Engine</h3>
+      <p class="modal-desc">
+        Hang tight! We're burning some extra calories and tailoring your personalized health insights.
+      </p>
+
+      <div class="timer-badge">
+        <span class="pulse-dot"></span>
+        Optimizing • <strong>{{ serverStatus.elapsedSeconds() }}s</strong>
+      </div>
+    </div>
+  </div>
+}

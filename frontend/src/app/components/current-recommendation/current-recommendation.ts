@@ -1,6 +1,9 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import Chart from 'chart.js/auto';
 import { AuthService } from '../../services/auth';
+import { IndexedDbService } from '../../services/indexed-db';
 import { NavigationComponent } from '../navigation/navigation';
 
 interface RecommendationCard {
@@ -13,13 +16,14 @@ interface RecommendationCard {
 @Component({
   selector: 'app-current-recommendation',
   standalone: true,
-  imports: [CommonModule, NavigationComponent],
+  imports: [CommonModule, FormsModule, NavigationComponent],
   templateUrl: './current-recommendation.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './current-recommendation.scss',
 })
-export class CurrentRecommendationComponent implements OnInit {
+export class CurrentRecommendationComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
+  private readonly dbService = inject(IndexedDbService);
 
   isLoading = signal(true);
   isGenerating = signal(false);
@@ -32,24 +36,31 @@ export class CurrentRecommendationComponent implements OnInit {
   monthlyData = signal<any>(null);
   weeklyReports = signal<any[]>([]);
 
+  // Analytics Graph States
+  selectedMetric = signal<'all' | 'calories_burned' | 'protein' | 'fibre' | 'carbs' | 'vitamins'>('all');
+  selectedTimeframe = signal<'daily' | 'weekly' | 'monthly'>('daily');
+  graphData = signal<any>(null);
+  isGraphLoading = signal(true);
+
+  @ViewChild('analyticsCanvas', { static: false }) analyticsCanvasRef?: ElementRef<HTMLCanvasElement>;
+  private chartInstance: Chart | null = null;
+
   ngOnInit(): void {
     const userid = this.authService.getUserId();
-    if (userid) {
-      // 1. Fetch user details first
-      this.authService.getUserDetails(userid).subscribe({
-        next: (user) => {
-          this.userName.set(user.name || 'Member');
-          this.rawBio.set(user.userdetails || '');
-          this.generateRecommendations(user.userdetails || '', []);
+    const localUser = this.authService.getLocalUser();
 
-          // 2. Fetch monthly aggregation and insights via stream
-          this.fetchRecommendationsStream(userid);
-        },
-        error: (err) => {
-          console.error('Failed to load user details for recommendations:', err);
-          this.isLoading.set(false);
-        },
-      });
+    if (localUser) {
+      this.userName.set(localUser.name || 'Member');
+      this.rawBio.set(localUser.userdetails || '');
+      this.generateRecommendations(localUser.userdetails || '', []);
+    }
+
+    if (userid) {
+      // 1. Fetch monthly aggregation and insights via stateless stream
+      this.fetchRecommendationsStream(userid);
+
+      // 2. Fetch analytics graph data
+      this.fetchGraphData(userid);
     } else {
       this.isLoading.set(false);
     }
@@ -57,8 +68,29 @@ export class CurrentRecommendationComponent implements OnInit {
 
   async fetchRecommendationsStream(userid: string, regenerate: boolean = false): Promise<void> {
     try {
-      const url = this.authService.getRecommendationsStreamUrl(userid, regenerate);
-      const response = await fetch(url);
+      const [meals, activities, profile, monthlyAggs] = await Promise.all([
+        this.dbService.getMealLogs(userid),
+        this.dbService.getActivityLogs(userid),
+        this.dbService.getUserProfile(userid),
+        this.dbService.getMonthlyAggregates(userid)
+      ]);
+
+      const payload = {
+        user_id: userid,
+        user_name: profile?.name || this.userName(),
+        user_details: profile?.structured_details ? JSON.stringify(profile.structured_details) : this.rawBio(),
+        meal_logs: meals,
+        activity_logs: activities,
+        monthly_aggregates: monthlyAggs,
+        regenerate
+      };
+
+      const url = this.authService.getStatelessRecommendationsStreamUrl();
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
       if (!response.body) {
         throw new Error('Readable stream not supported by browser response.');
@@ -74,7 +106,7 @@ export class CurrentRecommendationComponent implements OnInit {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Hold partial line in buffer
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
           const trimmed = line.trim();
@@ -89,20 +121,33 @@ export class CurrentRecommendationComponent implements OnInit {
         }
       }
     } catch (err) {
-      console.warn('Streaming failed or timed out. Falling back to static HTTP load:', err);
-      // Fallback: Fetch via normal JSON API
-      this.authService.getRecommendations(userid, regenerate).subscribe({
-        next: (data) => {
-          this.monthlyData.set(data.monthly_data);
-          this.weeklyReports.set(data.weekly_reports || []);
-          this.isGenerating.set(false);
-          this.isLoading.set(false);
-        },
-        error: (fallbackErr) => {
-          console.error('Fallback static load failed too:', fallbackErr);
-          this.isLoading.set(false);
-        },
-      });
+      console.warn('Stateless streaming failed, using GET stream fallback:', err);
+      try {
+        const url = this.authService.getRecommendationsStreamUrl(userid, regenerate);
+        const response = await fetch(url);
+        if (response.body) {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder('utf-8');
+          let buffer = '';
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              try {
+                this.handleStreamMessage(JSON.parse(trimmed));
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback load failed:', fallbackErr);
+        this.isLoading.set(false);
+      }
     }
   }
 
@@ -336,4 +381,240 @@ export class CurrentRecommendationComponent implements OnInit {
     // Call the stream generation with force regenerate option
     this.fetchRecommendationsStream(userid, true);
   }
+
+  fetchGraphData(userid: string): void {
+    this.isGraphLoading.set(true);
+    this.authService.getGraphData(userid).subscribe({
+      next: (data) => {
+        this.graphData.set(data);
+        this.isGraphLoading.set(false);
+        setTimeout(() => this.renderChart(), 50);
+      },
+      error: (err) => {
+        console.error('Failed to load analytics graph data:', err);
+        this.isGraphLoading.set(false);
+      }
+    });
+  }
+
+  renderChart(): void {
+    if (!this.analyticsCanvasRef?.nativeElement || !this.graphData()) return;
+
+    const ctx = this.analyticsCanvasRef.nativeElement.getContext('2d');
+    if (!ctx) return;
+
+    if (this.chartInstance) {
+      this.chartInstance.destroy();
+    }
+
+    const timeframe = this.selectedTimeframe();
+    const metric = this.selectedMetric();
+    const currentSet = this.graphData()[timeframe];
+
+    if (!currentSet) return;
+
+    const labels = currentSet.labels || [];
+
+    const metricConfigs: Record<string, { label: string; color: string; bgGradient: string }> = {
+      calories_burned: {
+        label: 'Calories Burned (kcal)',
+        color: '#1d4ed8',
+        bgGradient: 'rgba(29, 78, 216, 0.15)'
+      },
+      protein: {
+        label: 'Protein Intake (g)',
+        color: '#10b981',
+        bgGradient: 'rgba(16, 185, 129, 0.15)'
+      },
+      fibre: {
+        label: 'Fibre Intake (g)',
+        color: '#059669',
+        bgGradient: 'rgba(5, 150, 105, 0.15)'
+      },
+      carbs: {
+        label: 'Carb Intake (g)',
+        color: '#f59e0b',
+        bgGradient: 'rgba(245, 158, 11, 0.15)'
+      },
+      vitamins: {
+        label: 'Vitamin Intake Score (0-100)',
+        color: '#8b5cf6',
+        bgGradient: 'rgba(139, 92, 246, 0.15)'
+      }
+    };
+
+    let datasets: any[] = [];
+    let scalesConfig: any = {};
+
+    if (metric === 'all') {
+      datasets = [
+        {
+          label: '🔥 Calories Burned (kcal)',
+          data: currentSet['calories_burned'] || [],
+          borderColor: '#1d4ed8',
+          backgroundColor: 'rgba(29, 78, 216, 0.08)',
+          yAxisID: 'y',
+          fill: false,
+          tension: 0.4,
+          borderWidth: 3,
+          pointRadius: 4,
+          pointHoverRadius: 7
+        },
+        {
+          label: '🥩 Protein (g)',
+          data: currentSet['protein'] || [],
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.08)',
+          yAxisID: 'y1',
+          fill: false,
+          tension: 0.4,
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointHoverRadius: 7
+        },
+        {
+          label: '🌾 Fibre (g)',
+          data: currentSet['fibre'] || [],
+          borderColor: '#059669',
+          backgroundColor: 'rgba(5, 150, 105, 0.08)',
+          yAxisID: 'y1',
+          fill: false,
+          tension: 0.4,
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointHoverRadius: 7
+        },
+        {
+          label: '🍞 Carbs (g)',
+          data: currentSet['carbs'] || [],
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.08)',
+          yAxisID: 'y1',
+          fill: false,
+          tension: 0.4,
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointHoverRadius: 7
+        },
+        {
+          label: '⚡ Vitamin Score',
+          data: currentSet['vitamins'] || [],
+          borderColor: '#8b5cf6',
+          backgroundColor: 'rgba(139, 92, 246, 0.08)',
+          yAxisID: 'y1',
+          fill: false,
+          tension: 0.4,
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointHoverRadius: 7
+        }
+      ];
+
+      scalesConfig = {
+        x: {
+          grid: { color: 'rgba(0, 0, 0, 0.05)' },
+          ticks: { color: '#4b5563', font: { family: 'Inter', size: 11 } }
+        },
+        y: {
+          type: 'linear',
+          display: true,
+          position: 'left',
+          title: { display: true, text: 'Calories (kcal)', color: '#1d4ed8', font: { family: 'Inter', size: 11, weight: 'bold' } },
+          beginAtZero: true,
+          grid: { color: 'rgba(0, 0, 0, 0.05)' },
+          ticks: { color: '#1d4ed8', font: { family: 'Inter', size: 11 } }
+        },
+        y1: {
+          type: 'linear',
+          display: true,
+          position: 'right',
+          title: { display: true, text: 'Macros (g) / Vitamin Score', color: '#10b981', font: { family: 'Inter', size: 11, weight: 'bold' } },
+          beginAtZero: true,
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#10b981', font: { family: 'Inter', size: 11 } }
+        }
+      };
+    } else {
+      const values = currentSet[metric] || [];
+      const cfg = metricConfigs[metric] || metricConfigs['calories_burned'];
+
+      datasets = [{
+        label: cfg.label,
+        data: values,
+        borderColor: cfg.color,
+        backgroundColor: cfg.bgGradient,
+        fill: true,
+        tension: 0.4,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        pointBackgroundColor: cfg.color,
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2
+      }];
+
+      scalesConfig = {
+        x: {
+          grid: { color: 'rgba(0, 0, 0, 0.05)' },
+          ticks: { color: '#4b5563', font: { family: 'Inter', size: 11 } }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0, 0, 0, 0.05)' },
+          ticks: { color: '#4b5563', font: { family: 'Inter', size: 11 } }
+        }
+      };
+    }
+
+    this.chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: datasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: {
+              font: {
+                family: 'Inter',
+                size: 12,
+                weight: 'bold'
+              },
+              color: '#1f2937'
+            }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(17, 24, 39, 0.9)',
+            titleFont: { family: 'Outfit', size: 14 },
+            bodyFont: { family: 'Inter', size: 13 },
+            padding: 12,
+            cornerRadius: 10
+          }
+        },
+        scales: scalesConfig
+      }
+    });
+  }
+
+  onMetricChange(metric: any): void {
+    this.selectedMetric.set(metric);
+    this.renderChart();
+  }
+
+  onTimeframeChange(timeframe: 'daily' | 'weekly' | 'monthly'): void {
+    this.selectedTimeframe.set(timeframe);
+    this.renderChart();
+  }
+
+  ngOnDestroy(): void {
+    if (this.chartInstance) {
+      this.chartInstance.destroy();
+    }
+  }
 }
+

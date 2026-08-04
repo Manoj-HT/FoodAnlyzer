@@ -5,7 +5,7 @@
       <h1>FoodAnalyzer</h1>
     </div>
     
-    <nav class="header-nav">
+    <nav class="header-nav desktop-only">
       <a routerLink="/dashboard" routerLinkActive="active" class="nav-link">
         🏠 Home
       </a>
@@ -15,13 +15,41 @@
       <a routerLink="/recommendations" routerLinkActive="active" class="nav-link">
         💡 Recommendations
       </a>
+      <a routerLink="/profile" routerLinkActive="active" class="nav-link">
+        👤 Profile
+      </a>
     </nav>
   </div>
 
-  <div class="header-user">
-    <span class="user-greeting">Welcome back, <strong>{{ userName() }}</strong></span>
-    <button class="btn btn-outline" (click)="onLogout()">
-      <span class="btn-icon">🚪</span> Logout
-    </button>
-  </div>
 </header>
+
+<!-- Floating Pill Navigation (Mobile View) -->
+<nav class="mobile-floating-pill">
+  <a routerLink="/dashboard" routerLinkActive="active" #rlaHome="routerLinkActive" class="pill-item">
+    <span class="pill-icon">🏠</span>
+    @if (rlaHome.isActive) {
+      <span class="pill-label">Home</span>
+    }
+  </a>
+
+  <a routerLink="/logs" routerLinkActive="active" #rlaLogs="routerLinkActive" class="pill-item">
+    <span class="pill-icon">📋</span>
+    @if (rlaLogs.isActive) {
+      <span class="pill-label">Logs</span>
+    }
+  </a>
+
+  <a routerLink="/recommendations" routerLinkActive="active" #rlaRecs="routerLinkActive" class="pill-item">
+    <span class="pill-icon">💡</span>
+    @if (rlaRecs.isActive) {
+      <span class="pill-label">Recs</span>
+    }
+  </a>
+
+  <a routerLink="/profile" routerLinkActive="active" #rlaProfile="routerLinkActive" class="pill-item">
+    <span class="pill-icon">👤</span>
+    @if (rlaProfile.isActive) {
+      <span class="pill-label">Profile</span>
+    }
+  </a>
+</nav>

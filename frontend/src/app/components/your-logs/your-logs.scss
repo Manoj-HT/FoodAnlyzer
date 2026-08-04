@@ -104,20 +104,13 @@
   padding-bottom: 20px;
   -webkit-overflow-scrolling: touch;
   
-  // Custom scrollbar
+  // Hide scrollbar while keeping scrollable
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   &::-webkit-scrollbar {
-    height: 8px;
-  }
-  &::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.02);
-    border-radius: 4px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: rgba(44, 76, 56, 0.15);
-    border-radius: 4px;
-    &:hover {
-      background: rgba(44, 76, 56, 0.3);
-    }
+    display: none;
+    width: 0;
+    height: 0;
   }
 }
 
@@ -472,7 +465,7 @@
 
 @media (max-width: 768px) {
   .logs-content {
-    padding: 20px 16px;
+    padding: 20px 16px 100px 16px;
   }
   .weekly-grid-container {
     padding-bottom: 12px;
@@ -633,4 +626,270 @@
     }
   }
 }
+
+// Day Summary Button & Overview Modal Styles
+.btn-day-summary {
+  background: rgba(45, 76, 57, 0.08);
+  border: 1px solid rgba(45, 76, 57, 0.15);
+  color: #2d4c39;
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #2d4c39;
+    color: #ffffff;
+  }
+}
+
+.activity-section {
+  background: rgba(219, 234, 254, 0.35);
+  border: 1px solid rgba(30, 64, 175, 0.12);
+
+  .section-title {
+    color: #1e40af;
+  }
+}
+
+.activity-log-item {
+  background: #ffffff;
+  border: 1px solid rgba(30, 64, 175, 0.1);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  .act-desc {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #1e3a8a;
+  }
+
+  .act-meta {
+    font-size: 0.7rem;
+    color: #3b82f6;
+    font-weight: 600;
+  }
+}
+
+// Day Overview Modal Body
+.day-overview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  color: #6b7280;
+}
+
+.day-overview-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  font-family: 'Inter', sans-serif;
+
+  .overview-date-badge {
+    align-self: flex-start;
+    background: rgba(45, 76, 57, 0.08);
+    border: 1px solid rgba(45, 76, 57, 0.15);
+    color: #2d4c39;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+
+  .day-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+
+    @media (max-width: 500px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  .summary-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 8px;
+    border-radius: 12px;
+    background: #f8faf8;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+
+    .val {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 800;
+    }
+
+    .lbl {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #6b7280;
+      margin-top: 2px;
+      letter-spacing: 0.5px;
+    }
+
+    &.net {
+      background: rgba(45, 76, 57, 0.08);
+      .val { color: #1e3a24; }
+    }
+    &.consumed {
+      background: rgba(245, 158, 11, 0.08);
+      .val { color: #b45309; }
+    }
+    &.burned {
+      background: rgba(59, 130, 246, 0.08);
+      .val { color: #1d4ed8; }
+    }
+    &.protein {
+      background: rgba(16, 185, 129, 0.08);
+      .val { color: #047857; }
+    }
+  }
+
+  .overview-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    h4 {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #111827;
+    }
+  }
+
+  .overview-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .overview-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 10px;
+
+    .item-main {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+
+      .item-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #1f2937;
+      }
+      .item-time {
+        font-size: 0.75rem;
+        color: #6b7280;
+      }
+    }
+
+    .item-stats {
+      display: flex;
+      gap: 8px;
+
+      .stat-pill {
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 6px;
+
+        &.cal { background: #fef3c7; color: #92400e; }
+        &.grade { background: #d1fae5; color: #065f46; }
+        &.burn { background: #dbeafe; color: #1e40af; }
+        &.dur { background: #f3e8ff; color: #6b21a8; }
+      }
+    }
+  }
+
+  .empty-text {
+    font-size: 0.85rem;
+    color: #9ca3af;
+    font-style: italic;
+    margin: 0;
+  }
+}
+
+.mini-tasks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+
+  .mini-task-chip {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #1e40af;
+    background: rgba(30, 64, 175, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(30, 64, 175, 0.15);
+  }
+}
+
+.activity-task-breakdown {
+  width: 100%;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(229, 231, 235, 0.8);
+
+  .breakdown-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #4b5563;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .task-pills-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .task-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 4px 8px;
+    border-radius: 6px;
+
+    .t-name {
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .t-det {
+      color: #64748b;
+      font-size: 0.7rem;
+    }
+
+    .t-cals {
+      font-weight: 800;
+      color: #1d4ed8;
+      background: #dbeafe;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+  }
+}
+
 

@@ -4,6 +4,8 @@ import { RegisterComponent } from './components/register/register';
 import { WhatYouAteTodayComponent } from './components/what-you-ate-today/what-you-ate-today';
 import { YourLogsComponent } from './components/your-logs/your-logs';
 import { CurrentRecommendationComponent } from './components/current-recommendation/current-recommendation';
+import { DayOverviewComponent } from './components/day-overview/day-overview';
+import { ProfileComponent } from './components/profile/profile';
 import { authGuard } from './guards/auth';
 
 export const routes: Routes = [
@@ -11,7 +13,9 @@ export const routes: Routes = [
   { path: 'register', component: RegisterComponent },
   { path: 'dashboard', component: WhatYouAteTodayComponent, canActivate: [authGuard] },
   { path: 'logs', component: YourLogsComponent, canActivate: [authGuard] },
+  { path: 'day-overview/:date', component: DayOverviewComponent, canActivate: [authGuard] },
   { path: 'recommendations', component: CurrentRecommendationComponent, canActivate: [authGuard] },
+  { path: 'profile', component: ProfileComponent, canActivate: [authGuard] },
   { path: '', redirectTo: '/login', pathMatch: 'full' },
   { path: '**', redirectTo: '/login' },
 ];

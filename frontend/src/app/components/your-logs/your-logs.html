@@ -47,9 +47,14 @@
         <div class="weekly-columns-wrapper">
           @for (column of dayColumns(); track column.dateString) {
             <div class="day-column">
-              <header class="column-header">
-                <h3>{{ column.dayName }}</h3>
-                <span class="column-date">{{ column.dateLabel }}</span>
+              <header class="column-header" (click)="openDayOverview(column.dateString)" style="cursor: pointer;" title="Click for Full Day Overview">
+                <div>
+                  <h3>{{ column.dayName }}</h3>
+                  <span class="column-date">{{ column.dateLabel }}</span>
+                </div>
+                <button type="button" class="btn-day-summary" (click)="$event.stopPropagation(); openDayOverview(column.dateString)">
+                  📊 Overview
+                </button>
               </header>
 
               <div class="column-sections">
@@ -137,6 +142,28 @@
                       </button>
                     } @empty {
                       <span class="no-meals">No meals logged</span>
+                    }
+                  </div>
+                </section>
+
+                <!-- Physical Activity Section -->
+                <section class="day-section activity-section">
+                  <div class="section-title">🏃 Physical Activity</div>
+                  <div class="section-meals">
+                    @for (act of column.activities; track act.id) {
+                      <div class="activity-log-item">
+                        <span class="act-desc">{{ act.description }}</span>
+                        <span class="act-meta">🔥 {{ act.report?.calories_burned || 0 }} kcal • {{ act.report?.duration_minutes || 0 }} mins</span>
+                        @if (act.report?.tasks && act.report.tasks.length > 0) {
+                          <div class="mini-tasks">
+                            @for (t of act.report.tasks; track t.task) {
+                              <span class="mini-task-chip">{{ t.task }}: {{ t.calories_burned }} kcal</span>
+                            }
+                          </div>
+                        }
+                      </div>
+                    } @empty {
+                      <span class="no-meals">No activities logged</span>
                     }
                   </div>
                 </section>

@@ -11,16 +11,35 @@ import {
 import { Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService, User } from '../../services/auth';
+import { IndexedDbService } from '../../services/indexed-db';
+import { DeviceCapabilityService } from '../../services/device-capability';
 import { MediaPreviewService, MediaPreviewItem } from '../../services/media-preview';
 import { ModalComponent } from '../../utilities/components/modal/modal';
 import { NavigationComponent } from '../navigation/navigation';
+import { AccordionStateService } from '../../services/accordion-state';
 
-interface MealBreakdown {
+export interface MealBreakdown {
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
   grade: string;
+  tips: string[];
+}
+
+export interface ActivityTask {
+  task: string;
+  details?: string;
+  calories_burned: number;
+}
+
+export interface ActivityBreakdown {
+  clean_title?: string;
+  calories_burned: number;
+  duration_minutes: number;
+  intensity: string;
+  activity_type: string;
+  tasks?: ActivityTask[];
   tips: string[];
 }
 
@@ -34,9 +53,12 @@ interface MealBreakdown {
 })
 export class WhatYouAteTodayComponent implements OnInit {
   private readonly authService = inject(AuthService);
+  private readonly indexedDb = inject(IndexedDbService);
+  readonly deviceCapability = inject(DeviceCapabilityService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly mediaPreviewService = inject(MediaPreviewService);
+  readonly accordionService = inject(AccordionStateService);
 
   userName = signal('Member');
   userEmail = signal('');
@@ -92,22 +114,31 @@ export class WhatYouAteTodayComponent implements OnInit {
   detailsPlaceholderText = signal('');
   isUpdatingDetails = signal(false);
 
+  // Activity Logging States
+  activityInput = signal('');
+  isActivityAnalyzing = signal(false);
+  showActivityResult = signal(false);
+  activityBreakdown = signal<ActivityBreakdown | null>(null);
+  isActivityLogModalOpen = signal(false);
+  isActivitySuccessModalOpen = signal(false);
+  activityLogDateTime = signal('');
+  activitySuggestions = signal<string[]>([
+    '30 min morning jog in the park',
+    '45 mins weight training at gym',
+    '5 km outdoor running',
+    '1 hour evening brisk walk',
+    '30 mins intense cycling'
+  ]);
+
   @ViewChild('cameraVideo', { static: false }) cameraVideoRef?: ElementRef<HTMLVideoElement>;
   private cameraStream: MediaStream | null = null;
 
   ngOnInit(): void {
-    const userid = this.authService.getUserId();
-    if (userid) {
-      this.authService.getUserDetails(userid).subscribe({
-        next: (user) => {
-          this.userName.set(user.name || 'Member');
-          this.userEmail.set(user.email);
-          this.userBio.set(user.userdetails || 'No profile details available.');
-        },
-        error: () => {
-          // If fetch fails, we still show the page with default name
-        },
-      });
+    const localUser = this.authService.getLocalUser();
+    if (localUser) {
+      this.userName.set(localUser.name || 'Member');
+      this.userEmail.set(localUser.email || '');
+      this.userBio.set(localUser.userdetails || 'No profile details available.');
     }
 
     // Read query params for pre-populating food input and time
@@ -161,6 +192,11 @@ export class WhatYouAteTodayComponent implements OnInit {
   }
 
   onAnalyzeFood(): void {
+    if (this.foodInput().trim()) {
+      this.runFinalFoodAnalysis();
+      return;
+    }
+
     const untranscribedAudio = this.previewItems().filter(
       (i) => i.type === 'audio' && !i.isAnalyzed,
     );
@@ -644,6 +680,26 @@ export class WhatYouAteTodayComponent implements OnInit {
     // Close log modal immediately before making the call
     this.isLogModalOpen.set(false);
 
+    // Save to local IndexedDB store (Zero-Cloud DB, 6-Month Data Lifecycle)
+    const logDt = new Date(this.logDateTime() || Date.now());
+    const dateStr = logDt.toISOString().split('T')[0];
+    const timeStr = `${String(logDt.getHours()).padStart(2, '0')}:${String(logDt.getMinutes()).padStart(2, '0')}`;
+    
+    this.indexedDb.addMealLog({
+      userId: userid,
+      date: dateStr,
+      time: timeStr,
+      time_period: logDt.getHours() < 11 ? 'Breakfast' : logDt.getHours() < 16 ? 'Lunch' : logDt.getHours() < 20 ? 'Dinner' : 'Snacks',
+      description: this.foodInput(),
+      food_item: this.foodInput(),
+      calories: breakdown.calories,
+      protein: breakdown.protein,
+      carbs: breakdown.carbs,
+      fat: breakdown.fat,
+      grade: breakdown.grade,
+      tips: breakdown.tips ? breakdown.tips.join('; ') : ''
+    }).catch(err => console.error('IndexedDB save error:', err));
+
     this.authService.addMealLog(userid, payload).subscribe({
       next: () => {
         // Show success modal
@@ -661,9 +717,102 @@ export class WhatYouAteTodayComponent implements OnInit {
         this.detectedFood.set('');
       },
       error: (err) => {
-        console.error('Failed to log meal:', err);
-        alert('Failed to log meal. Please try again.');
+        console.error('Failed to log meal to server:', err);
+        // Even if server request fails, offline log succeeded locally!
+        this.isSuccessModalOpen.set(true);
+        this.previewItems().forEach((item) => URL.revokeObjectURL(item.blobUrl));
+        this.previewItems.set([]);
+        this.foodInput.set('');
+        this.showResult.set(false);
+        this.mealBreakdown.set(null);
       },
+    });
+  }
+
+  applyActivitySuggestion(suggestion: string): void {
+    this.activityInput.set(suggestion);
+  }
+
+  onAnalyzeActivity(): void {
+    const text = this.activityInput().trim();
+    if (!text) return;
+
+    this.isActivityAnalyzing.set(true);
+    this.showActivityResult.set(false);
+
+    this.authService.analyzeActivity(text).subscribe({
+      next: (res) => {
+        this.activityBreakdown.set(res);
+        this.isActivityAnalyzing.set(false);
+        this.showActivityResult.set(true);
+      },
+      error: (err) => {
+        this.isActivityAnalyzing.set(false);
+        console.error('Activity analysis failed:', err);
+        alert('Failed to analyze activity. Please try again.');
+      }
+    });
+  }
+
+  openActivityLogModal(): void {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+
+    this.activityLogDateTime.set(`${year}-${month}-${day}T${hours}:${minutes}`);
+    this.isActivityLogModalOpen.set(true);
+  }
+
+  confirmLogActivity(): void {
+    const userid = this.authService.getUserId();
+    const breakdown = this.activityBreakdown();
+    if (!userid || !breakdown) {
+      alert('Error: User session missing or activity data invalid.');
+      return;
+    }
+
+    const desc = breakdown.clean_title || this.activityInput();
+    const payload = {
+      description: desc,
+      time: this.activityLogDateTime(),
+      report: breakdown
+    };
+
+    this.isActivityLogModalOpen.set(false);
+
+    // Save to client-side IndexedDB store
+    const actDt = new Date(this.activityLogDateTime() || Date.now());
+    const actDateStr = actDt.toISOString().split('T')[0];
+    const actTimeStr = `${String(actDt.getHours()).padStart(2, '0')}:${String(actDt.getMinutes()).padStart(2, '0')}`;
+
+    this.indexedDb.addActivityLog({
+      userId: userid,
+      date: actDateStr,
+      time: actTimeStr,
+      activity_name: desc,
+      duration_minutes: breakdown.duration_minutes || 30,
+      calories_burned: breakdown.calories_burned || 100,
+      intensity: breakdown.intensity || 'Moderate'
+    }).catch(err => console.error('IndexedDB activity save error:', err));
+
+    this.authService.addActivityLog(userid, payload).subscribe({
+      next: () => {
+        this.isActivitySuccessModalOpen.set(true);
+        this.activityInput.set('');
+        this.showActivityResult.set(false);
+        this.activityBreakdown.set(null);
+      },
+      error: (err) => {
+        console.error('Failed to log activity to server:', err);
+        // Local save succeeded
+        this.isActivitySuccessModalOpen.set(true);
+        this.activityInput.set('');
+        this.showActivityResult.set(false);
+        this.activityBreakdown.set(null);
+      }
     });
   }
 

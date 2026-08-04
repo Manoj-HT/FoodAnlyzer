@@ -11,21 +11,24 @@ html, body {
   color: #2e3d30;
 }
 
-/* Beautiful custom scrollbars */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Completely hide scrollbars project-wide while maintaining smooth scrolling */
+html, body, *, *::before, *::after {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
 }
 
+::-webkit-scrollbar,
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-thumb,
 ::-webkit-scrollbar-track {
-  background: #f4f6f3;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(44, 76, 56, 0.15);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(44, 76, 56, 0.35);
+  background: transparent !important;
+  display: none !important;
 }

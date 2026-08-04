@@ -28,6 +28,20 @@ interface MealLog {
   timePeriod?: string;
 }
 
+interface ActivityLogItem {
+  id: string;
+  description: string;
+  time: string;
+  report?: {
+    calories_burned: number;
+    duration_minutes: number;
+    intensity: string;
+    activity_type: string;
+    tasks?: { task: string; details?: string; calories_burned: number }[];
+    tips?: string[];
+  };
+}
+
 interface DayColumn {
   dateLabel: string;
   dayName: string;
@@ -38,6 +52,7 @@ interface DayColumn {
     evening: MealLog[];
     lateNight: MealLog[];
   };
+  activities: ActivityLogItem[];
 }
 
 @Component({
@@ -54,6 +69,7 @@ export class YourLogsComponent implements OnInit {
 
   logs = signal<MealLog[]>([]);
   inferredLogs = signal<MealLog[]>([]);
+  activityLogs = signal<ActivityLogItem[]>([]);
   lowData = signal(false);
   isLoading = signal(true);
   errorMsg = signal('');
@@ -78,6 +94,7 @@ export class YourLogsComponent implements OnInit {
     const columns: DayColumn[] = [];
     const today = new Date();
     const allLogs = this.logs();
+    const allActivities = this.activityLogs();
     const offsetDays = this.weekOffset() * 7;
 
     for (let i = 0; i < 7; i++) {
@@ -94,6 +111,7 @@ export class YourLogsComponent implements OnInit {
 
       // Find logs matching this date
       const dayLogs = allLogs.filter((log) => log.time.split('T')[0] === dateString);
+      const dayActivities = allActivities.filter((act) => act.time.split('T')[0] === dateString);
 
       // Categorize into 4 sections
       const morning: MealLog[] = [];
@@ -145,6 +163,7 @@ export class YourLogsComponent implements OnInit {
           evening,
           lateNight,
         },
+        activities: dayActivities,
       });
     }
 
@@ -165,19 +184,17 @@ export class YourLogsComponent implements OnInit {
     const userid = this.authService.getUserId();
     if (userid) {
       this.isLoading.set(true);
-      forkJoin({
-        actual: this.authService.getMealLogs(userid, this.weekOffset()),
-        inferred: this.authService.getInferredLogs(userid, this.weekOffset())
-      }).subscribe({
+      this.authService.getUnifiedLogs(userid, this.weekOffset()).subscribe({
         next: (res) => {
-          this.logs.set(res.actual);
-          this.inferredLogs.set(res.inferred.inferred_logs || []);
-          this.lowData.set(res.inferred.low_data || false);
+          this.logs.set(res.food_logs || []);
+          this.inferredLogs.set(res.inferred_logs || []);
+          this.lowData.set(res.low_data || false);
+          this.activityLogs.set(res.activity_logs || []);
           this.isLoading.set(false);
         },
         error: (err) => {
           console.error('Failed to load logs:', err);
-          this.errorMsg.set('Unable to retrieve meal logs at this time.');
+          this.errorMsg.set('Unable to retrieve logs at this time.');
           this.isLoading.set(false);
         },
       });
@@ -185,6 +202,10 @@ export class YourLogsComponent implements OnInit {
       this.isLoading.set(false);
       this.errorMsg.set('User session not found.');
     }
+  }
+
+  openDayOverview(dateString: string): void {
+    this.router.navigate(['/day-overview', dateString]);
   }
 
   nextWeek(): void {

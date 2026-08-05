@@ -21,10 +21,68 @@ except ImportError:
     HAS_ML = False
 
 # ========================================================
-# LLM CONFIGURATION FLAGS
+# LLM CONFIGURATION & GEMINI FALLBACK ENGINE
 # ========================================================
-# Choose preferred provider: "gemini", "ollama", or "fallback"
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
+GEMINI_MODELS = [
+    "gemini-flash-latest",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-lite-latest",
+]
+
+def get_gemini_api_key() -> Optional[str]:
+    key = os.environ.get("GEMINI_API_KEY")
+    if key and key.strip():
+        return key.strip()
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidate_paths = [
+        os.path.join(base_dir, "..", "apikey.md"),
+        os.path.join(base_dir, "apikey.md"),
+        "/home/mht/Projects/College/FoodAnlyzer/apikey.md"
+    ]
+    for path in candidate_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    lines = [line.strip() for line in f if line.strip()]
+                    if lines and lines[0]:
+                        return lines[0]
+            except Exception as e:
+                print(f"[GEMINI SETUP] Warning reading {path}: {e}")
+    return None
+
+def call_gemini_generate_with_fallback(prompt: str, response_json: bool = True) -> tuple[Optional[str], str]:
+    api_key = get_gemini_api_key()
+    if not api_key:
+        print("[GEMINI ENGINE] API key not found in environment or apikey.md.")
+        return None, "SYSTEM"
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}]
+    }
+    if response_json:
+        payload["generationConfig"] = {
+            "responseMimeType": "application/json"
+        }
+
+    for model in GEMINI_MODELS:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        req_data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=req_data, headers={'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as response:
+                res = json.loads(response.read().decode('utf-8'))
+                text_response = res["candidates"][0]["content"]["parts"][0]["text"]
+                return text_response, f"Gemini ({model})"
+        except Exception as e:
+            print(f"[GEMINI ENGINE] Model '{model}' failed: {e}. Retrying next available model...")
+            continue
+
+    return None, "SYSTEM"
+
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini" if get_gemini_api_key() else "ollama")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen1.5")
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generate")
 
@@ -65,14 +123,11 @@ USERS_BY_ID: Dict[str, UserInDB] = {}
 DB_FILE = os.path.join(os.path.dirname(__file__), "users.json")
 
 def save_to_json():
-    # Stateless backend mode: User profiles and state are stored in client-side IndexedDB.
-    # Zero disk persistence on server.
     pass
 
 def load_from_json():
     global USERS_BY_EMAIL, USERS_BY_ID
     if not os.path.exists(DB_FILE):
-        # Seed initial mock data for login testing if needed
         mock_user = UserInDB(
             name="Jane Doe",
             email="jane@example.com",
@@ -104,14 +159,12 @@ def load_from_json():
             user.last_insight_generated_time = udata.get("last_insight_generated_time", "")
             user.insight_version = udata.get("insight_version", 0)
             
-            # Migration of legacy details
             if "structured_details" in udata and udata["structured_details"]:
                 user.structured_details = udata["structured_details"]
             else:
                 legacy_bio = udata.get("bio", "")
                 legacy_mods = udata.get("modifications", [])
                 if legacy_bio or legacy_mods:
-                    # Run fallback parsing to reconstruct structured_details
                     fallback_res = run_fallback_user_analysis(legacy_bio, legacy_mods)
                     user.structured_details = fallback_res["structured_details"]
                     needs_resave = True
@@ -146,39 +199,19 @@ class UpdateDetailsRequest(BaseModel):
 # Helper: Unified LLM Client
 def call_llm_api(prompt: str, response_json: bool = True) -> Optional[str]:
     print(f"Calling LLM ({LLM_PROVIDER}) with prompt...")
-    if LLM_PROVIDER == "gemini":
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if api_key:
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-                payload = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                }
-                if response_json:
-                    payload["generationConfig"] = {
-                        "responseMimeType": "application/json"
-                    }
-                req_data = json.dumps(payload).encode('utf-8')
-                req = urllib.request.Request(
-                    url, 
-                    data=req_data, 
-                    headers={'Content-Type': 'application/json'}
-                )
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    res = json.loads(response.read().decode('utf-8'))
-                    text_response = res["candidates"][0]["content"]["parts"][0]["text"]
-                    return text_response
-            except Exception as e:
-                print(f"Error calling Gemini API: {e}")
-        else:
-            print("Gemini provider selected, but GEMINI_API_KEY environment variable is not set.")
-            
-    elif LLM_PROVIDER == "ollama":
+    if LLM_PROVIDER == "gemini" or get_gemini_api_key():
+        res_text, engine_used = call_gemini_generate_with_fallback(prompt, response_json)
+        if res_text:
+            print(f"[LLM API] Success using {engine_used}")
+            return res_text
+        print("[LLM API] All Gemini models failed or returned empty.")
+
+    if LLM_PROVIDER == "ollama":
         try:
             payload = {
                 "model": OLLAMA_MODEL,
                 "prompt": prompt,
-                "stream": False,
+                "stream": False
             }
             if response_json:
                 payload["format"] = "json"
@@ -188,13 +221,12 @@ def call_llm_api(prompt: str, response_json: bool = True) -> Optional[str]:
                 data=req_data,
                 headers={'Content-Type': 'application/json'}
             )
-            with urllib.request.urlopen(req, timeout=15) as response:
+            with urllib.request.urlopen(req, timeout=30) as response:
                 res = json.loads(response.read().decode('utf-8'))
-                text_response = res.get("response", "")
-                return text_response
+                return res.get("response")
         except Exception as e:
             print(f"Error calling Ollama API: {e}")
-            
+            return None
     return None
 
 def run_fallback_user_analysis(bio: Optional[str], modifications: list, existing_details: Optional[dict] = None) -> dict:
@@ -657,14 +689,13 @@ def get_specialized_classifier():
     return specialized_classifier
 
 def call_gemini_multimodal_api(image_bytes: bytes, mime_type: str, prompt: str) -> Optional[str]:
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = get_gemini_api_key()
     if not api_key:
-        print("Gemini API key not found in environment.")
+        print("Gemini API key not found in environment or apikey.md.")
         return None
     try:
         import base64
         encoded_image = base64.b64encode(image_bytes).decode('utf-8')
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
         payload = {
             "contents": [{
                 "parts": [
@@ -683,19 +714,26 @@ def call_gemini_multimodal_api(image_bytes: bytes, mime_type: str, prompt: str) 
                 "responseMimeType": "application/json"
             }
         }
-        req_data = json.dumps(payload).encode('utf-8')
-        req = urllib.request.Request(
-            url, 
-            data=req_data, 
-            headers={'Content-Type': 'application/json'}
-        )
-        with urllib.request.urlopen(req, timeout=20) as response:
-            res = json.loads(response.read().decode('utf-8'))
-            text_response = res["candidates"][0]["content"]["parts"][0]["text"]
-            return text_response
+        for model in GEMINI_MODELS:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            req_data = json.dumps(payload).encode('utf-8')
+            req = urllib.request.Request(
+                url, 
+                data=req_data, 
+                headers={'Content-Type': 'application/json'}
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=20) as response:
+                    res = json.loads(response.read().decode('utf-8'))
+                    text_response = res["candidates"][0]["content"]["parts"][0]["text"]
+                    print(f"[GEMINI MULTIMODAL] Success using model: {model}")
+                    return text_response
+            except Exception as e:
+                print(f"[GEMINI MULTIMODAL] Model '{model}' failed: {e}")
+                continue
     except Exception as e:
         print(f"Error calling Gemini Multimodal API: {e}")
-        return None
+    return None
 
 def call_ollama_multimodal_api(image_bytes: bytes, prompt: str) -> Optional[str]:
     try:
@@ -2496,11 +2534,9 @@ def get_user_recommendations(userid: str, regenerate: bool = False):
 
 
 def get_active_llm_engine() -> str:
-    if LLM_PROVIDER == "gemini":
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if api_key:
-            return "Gemini 2.0 Flash"
-        return "SYSTEM"
+    key = get_gemini_api_key()
+    if key:
+        return "Gemini Flash"
     elif LLM_PROVIDER == "ollama":
         if OLLAMA_MODEL:
             return f"Ollama ({OLLAMA_MODEL})"
@@ -2578,7 +2614,20 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
         full_raw_text = ""
         success = False
 
-        if LLM_PROVIDER == "ollama":
+        if LLM_PROVIDER == "gemini" or get_gemini_api_key():
+            text_response, engine_used = call_gemini_generate_with_fallback(prompt, response_json=True)
+            if text_response:
+                print(f"[STREAM ENGINE] -> Active Engine: {engine_used}")
+                full_raw_text = text_response
+                active_engine = engine_used
+                yield json.dumps({"type": "status", "engine": engine_used}) + "\n"
+                import time
+                for char in full_raw_text:
+                    yield json.dumps({"type": "token", "token": char, "engine": engine_used}) + "\n"
+                    time.sleep(0.001)
+                success = True
+
+        if not success and LLM_PROVIDER == "ollama":
             print(f"[STREAM ENGINE] -> Active Engine: OLLAMA | Model: {OLLAMA_MODEL} | URL: {OLLAMA_API_URL}")
             try:
                 payload = {
@@ -2603,38 +2652,6 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
                 success = True
             except Exception as e:
                 print(f"[STREAM ENGINE] ERROR streaming from Ollama: {e}")
-
-        elif LLM_PROVIDER == "gemini":
-            api_key = os.environ.get("GEMINI_API_KEY")
-            if api_key:
-                print(f"[STREAM ENGINE] -> Active Engine: GEMINI (gemini-2.0-flash API)")
-                try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-                    payload = {
-                        "contents": [{"parts": [{"text": prompt}]}],
-                        "generationConfig": {
-                            "responseMimeType": "application/json"
-                        }
-                    }
-                    req_data = json.dumps(payload).encode('utf-8')
-                    req = urllib.request.Request(
-                        url, 
-                        data=req_data, 
-                        headers={'Content-Type': 'application/json'}
-                    )
-                    with urllib.request.urlopen(req, timeout=20) as response:
-                        res = json.loads(response.read().decode('utf-8'))
-                        text_response = res["candidates"][0]["content"]["parts"][0]["text"]
-                        full_raw_text = text_response
-                        import time
-                        for char in full_raw_text:
-                            yield json.dumps({"type": "token", "token": char}) + "\n"
-                            time.sleep(0.001)
-                    success = True
-                except Exception as e:
-                    print(f"[STREAM ENGINE] ERROR calling Gemini for stream: {e}")
-            else:
-                print("[STREAM ENGINE] GEMINI provider selected, but GEMINI_API_KEY is missing in environment!")
 
         # Parse insights from the streamed text
         if success and full_raw_text:
@@ -2868,7 +2885,20 @@ def stateless_stream_recommendations_generator(payload: StatelessStreamPayload):
     full_raw_text = ""
     success = False
 
-    if LLM_PROVIDER == "ollama":
+    if LLM_PROVIDER == "gemini" or get_gemini_api_key():
+        text_response, engine_used = call_gemini_generate_with_fallback(prompt, response_json=True)
+        if text_response:
+            print(f"[STATELESS STREAM ENGINE] -> Active Engine: {engine_used}")
+            full_raw_text = text_response
+            active_engine = engine_used
+            yield json.dumps({"type": "status", "engine": engine_used}) + "\n"
+            import time
+            for char in full_raw_text:
+                yield json.dumps({"type": "token", "token": char, "engine": engine_used}) + "\n"
+                time.sleep(0.001)
+            success = True
+
+    if not success and LLM_PROVIDER == "ollama":
         print(f"[STATELESS STREAM ENGINE] -> Active Engine: OLLAMA | Model: {OLLAMA_MODEL} | URL: {OLLAMA_API_URL}")
         try:
             ollama_payload = {
@@ -2893,36 +2923,6 @@ def stateless_stream_recommendations_generator(payload: StatelessStreamPayload):
             success = True
         except Exception as e:
             print(f"[STATELESS STREAM ENGINE] ERROR streaming from Ollama: {e}")
-
-    elif LLM_PROVIDER == "gemini":
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if api_key:
-            print(f"[STATELESS STREAM ENGINE] -> Active Engine: GEMINI (gemini-2.0-flash API)")
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-                gemini_payload = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "responseMimeType": "application/json"
-                    }
-                }
-                req_data = json.dumps(gemini_payload).encode('utf-8')
-                req = urllib.request.Request(
-                    url, 
-                    data=req_data, 
-                    headers={'Content-Type': 'application/json'}
-                )
-                with urllib.request.urlopen(req, timeout=20) as response:
-                    res = json.loads(response.read().decode('utf-8'))
-                    text_response = res["candidates"][0]["content"]["parts"][0]["text"]
-                    full_raw_text = text_response
-                    import time
-                    for char in full_raw_text:
-                        yield json.dumps({"type": "token", "token": char}) + "\n"
-                        time.sleep(0.001)
-                success = True
-            except Exception as e:
-                print(f"[STREAM ENGINE] ERROR calling Gemini for stream: {e}, falling back to heuristic engine.")
 
     if success and full_raw_text:
         try:

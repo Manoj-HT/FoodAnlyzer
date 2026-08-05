@@ -70,6 +70,62 @@
   }
 }
 
+.google-auth-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.btn-google {
+  width: 100%;
+  background: #ffffff;
+  color: #3c4043;
+  border: 1px solid rgba(44, 76, 56, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  font-weight: 600;
+  border-radius: 12px;
+  padding: 12px 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: #f8faf8;
+    border-color: #2c4c38;
+    box-shadow: 0 4px 12px rgba(44, 76, 56, 0.12);
+    transform: translateY(-1px);
+  }
+
+  .google-icon {
+    flex-shrink: 0;
+  }
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #718375;
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-transform: lowercase;
+
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid rgba(44, 76, 56, 0.12);
+  }
+
+  span {
+    padding: 0 12px;
+  }
+}
+
 .auth-form {
   display: flex;
   flex-direction: column;

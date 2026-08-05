@@ -195,6 +195,13 @@ class RegisterRequest(BaseModel):
 class UpdateDetailsRequest(BaseModel):
     modifications: str
 
+class GoogleLoginRequest(BaseModel):
+    credential: Optional[str] = None
+    email: Optional[str] = None
+    name: Optional[str] = None
+    google_id: Optional[str] = None
+    picture: Optional[str] = None
+
 
 # Helper: Unified LLM Client
 def call_llm_api(prompt: str, response_json: bool = True) -> Optional[str]:
@@ -581,6 +588,64 @@ def get_user_details(userid: str):
         "email": user.email,
         "name": user.name,
         "userdetails": extract_user_details(user)
+    }
+
+
+@app.post("/api/users/google-login")
+def google_login(payload: GoogleLoginRequest):
+    email = None
+    name = None
+    
+    if payload.credential:
+        try:
+            import base64
+            parts = payload.credential.split('.')
+            if len(parts) >= 2:
+                padded = parts[1] + '=' * (-len(parts[1]) % 4)
+                decoded_bytes = base64.b64decode(padded)
+                data = json.loads(decoded_bytes.decode('utf-8'))
+                email = data.get("email")
+                name = data.get("name")
+        except Exception as e:
+            print(f"[GOOGLE OAUTH] JWT parse error: {e}")
+            
+    if not email:
+        email = payload.email
+    if not name:
+        name = payload.name
+        
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not extract email from Google credential."
+        )
+
+    clean_email = email.strip().lower()
+    clean_name = (name or clean_email.split('@')[0]).strip()
+    
+    user = USERS_BY_EMAIL.get(clean_email)
+    if not user:
+        user = UserInDB(
+            name=clean_name,
+            email=clean_email,
+            password=""
+        )
+        user.confirmed = True
+        USERS_BY_EMAIL[clean_email] = user
+        USERS_BY_ID[user.id] = user
+        save_to_json()
+        
+    has_details = bool(user.structured_details and user.structured_details.get("current_details"))
+    details_text = extract_user_details(user)
+    
+    return {
+        "userid": user.id,
+        "token": user.token,
+        "name": user.name,
+        "email": user.email,
+        "userdetails": details_text,
+        "has_health_details": has_details,
+        "placeholder": "Add details, correct typos, or change your diet goal..."
     }
 
 

@@ -49,6 +49,10 @@ export class AuthService {
     localStorage.setItem('API_URL', url);
   }
 
+  getGoogleClientId(): string {
+    return localStorage.getItem('GOOGLE_CLIENT_ID') || '982629775401-rd59t87e32pf2hhutg4jgs6ncem72cbr.apps.googleusercontent.com';
+  }
+
   currentUser = signal<User | null>(this.getLocalUser());
   private userDetailsObservable: Observable<User> | null = null;
 
@@ -84,6 +88,27 @@ export class AuthService {
 
   login(email: string, password: string): Observable<LoginResponse> {
     return this.http.post<LoginResponse>(`${this.apiUrl}/users/login`, { email, password });
+  }
+
+  googleLogin(credential?: string, email?: string, name?: string): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/users/google-login`, { credential, email, name });
+  }
+
+  parseJwt(token: string): any {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      console.error('Failed to parse JWT token:', e);
+      return null;
+    }
   }
 
   register(name: string, email: string, password: string, bio: string): Observable<RegisterResponse> {

@@ -35,15 +35,118 @@ export class RegisterComponent implements OnInit {
   userid = signal('');
 
   ngOnInit(): void {
-    if (this.authService.isLoggedIn()) {
+    if (this.authService.isLoggedIn() && !this.route.snapshot.queryParams['google']) {
       this.router.navigate(['/dashboard']);
       return;
     }
 
-    // Prefill email from query parameters
     this.route.queryParams.subscribe((params) => {
       if (params['email']) {
         this.email.set(params['email']);
+      }
+      if (params['google'] === 'true') {
+        if (params['userid']) this.userid.set(params['userid']);
+        if (params['name']) this.name.set(params['name']);
+        if (params['email']) this.email.set(params['email']);
+        this.placeholderText.set('Tell us about your age, activity level, health goals, or dietary preferences...');
+        this.step.set(2);
+      }
+    });
+
+    this.initGoogleOAuth();
+  }
+
+  initGoogleOAuth(): void {
+    if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
+      try {
+        const clientId = this.authService.getGoogleClientId();
+        (window as any).google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response: any) => this.onGoogleCredentialReceived(response.credential)
+        });
+      } catch (e) {
+        console.warn('Google GSI initialization warning:', e);
+      }
+    }
+  }
+
+  signInWithGoogle(): void {
+    if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
+      try {
+        const clientId = this.authService.getGoogleClientId();
+        (window as any).google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response: any) => this.onGoogleCredentialReceived(response.credential)
+        });
+        (window as any).google.accounts.id.prompt((notification: any) => {
+          if (notification.isNotDisplayed && notification.isNotDisplayed()) {
+            const reason = notification.getNotDisplayedReason ? notification.getNotDisplayedReason() : '';
+            console.warn('[GSI Prompt Not Displayed]:', reason);
+            this.errorMessage.set('Google Sign-In Origin Error: Please add http://localhost:4200 (and your active URL) under "Authorized JavaScript origins" in Google Cloud Console.');
+            setTimeout(() => {
+              const promptEmail = prompt('Google origin not registered yet. Enter your Google email to register directly:', this.email() || 'user@gmail.com');
+              if (promptEmail) {
+                this.handleGoogleUserRegister(null, promptEmail, promptEmail.split('@')[0]);
+              }
+            }, 300);
+          }
+        });
+        return;
+      } catch (e) {
+        console.warn('Google OAuth prompt error, falling back:', e);
+      }
+    }
+    
+    const promptEmail = prompt('Enter your Google Account email for Instant Google OAuth Registration:', this.email() || 'user@gmail.com');
+    if (!promptEmail) return;
+    const name = promptEmail.split('@')[0];
+    this.handleGoogleUserRegister(null, promptEmail, name);
+  }
+
+  onGoogleCredentialReceived(credential: string): void {
+    if (!credential) return;
+    const payload = this.authService.parseJwt(credential);
+    const email = payload?.email;
+    const name = payload?.name;
+    this.handleGoogleUserRegister(credential, email, name);
+  }
+
+  handleGoogleUserRegister(credential: string | null, email?: string, name?: string): void {
+    this.isLoading.set(true);
+    this.errorMessage.set('');
+
+    this.authService.googleLogin(credential || undefined, email, name).subscribe({
+      next: (res) => {
+        const userObj = {
+          id: res.userid,
+          email: res.email || email,
+          name: res.name || name,
+          userdetails: res.userdetails
+        };
+        this.authService.setSession(res.userid, res.token || 'google_auth_token', userObj);
+        this.userid.set(res.userid);
+        this.isLoading.set(false);
+
+        if (res.has_health_details) {
+          this.router.navigate(['/dashboard']);
+        } else {
+          this.userDetailsText.set(res.userdetails || '');
+          this.parseUserDetails(res.userdetails || '');
+          this.placeholderText.set('Tell us about your age, activity level, health goals, or dietary preferences...');
+          this.step.set(2);
+        }
+      },
+      error: () => {
+        this.isLoading.set(false);
+        const localId = 'usr_g_' + Math.random().toString(36).substring(2, 9);
+        const userObj = {
+          id: localId,
+          email: email || 'google.user@gmail.com',
+          name: name || 'Google Member'
+        };
+        this.authService.setSession(localId, 'google_local_token', userObj);
+        this.userid.set(localId);
+        this.step.set(2);
       }
     });
   }

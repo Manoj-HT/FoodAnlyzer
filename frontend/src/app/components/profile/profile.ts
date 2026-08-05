@@ -1,15 +1,15 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy, ViewChild, ElementRef } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth';
 import { IndexedDbService } from '../../services/indexed-db';
-import { NavigationComponent } from '../navigation/navigation';
+import { LogsStateService } from '../../services/logs-state';
 import { ModalComponent } from '../../utilities/components/modal/modal';
 
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [FormsModule, NavigationComponent, ModalComponent],
+  imports: [FormsModule, ModalComponent],
   templateUrl: './profile.html',
   styleUrl: './profile.scss',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -17,6 +17,7 @@ import { ModalComponent } from '../../utilities/components/modal/modal';
 export class ProfileComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly indexedDb = inject(IndexedDbService);
+  private readonly logsState = inject(LogsStateService);
   private readonly router = inject(Router);
 
   userName = signal('Member');
@@ -28,6 +29,13 @@ export class ProfileComponent implements OnInit {
   additionalDetailsInput = signal('');
   detailsPlaceholderText = signal('');
   isUpdatingDetails = signal(false);
+
+  // Import Modal & File Selection
+  isImportModalOpen = signal(false);
+  isImporting = signal(false);
+  importStatusMessage = signal('');
+  selectedImportFile: File | null = null;
+  @ViewChild('fileInput') fileInputRef!: ElementRef<HTMLInputElement>;
 
   ngOnInit(): void {
     const userid = this.authService.getUserId();
@@ -101,6 +109,55 @@ export class ProfileComponent implements OnInit {
     a.download = `FoodAnlyzer_Backup_${new Date().toISOString().split('T')[0]}.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  triggerImportFileSelect(): void {
+    if (this.fileInputRef?.nativeElement) {
+      this.fileInputRef.nativeElement.value = '';
+      this.fileInputRef.nativeElement.click();
+    }
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.selectedImportFile = input.files[0];
+      this.importStatusMessage.set('');
+      this.isImportModalOpen.set(true);
+    }
+  }
+
+  cancelImport(): void {
+    this.selectedImportFile = null;
+    this.isImportModalOpen.set(false);
+    if (this.fileInputRef?.nativeElement) {
+      this.fileInputRef.nativeElement.value = '';
+    }
+  }
+
+  async confirmImport(): Promise<void> {
+    if (!this.selectedImportFile) return;
+
+    this.isImporting.set(true);
+    try {
+      const success = await this.indexedDb.importCompressedBackup(this.selectedImportFile);
+      if (success) {
+        // Clear all cached responses so the app pulls fresh data from restored IndexedDB
+        this.logsState.invalidateCache();
+        this.importStatusMessage.set('Data successfully imported and updated!');
+        setTimeout(() => {
+          this.isImporting.set(false);
+          this.cancelImport();
+        }, 1000);
+      } else {
+        this.importStatusMessage.set('Failed to import backup file. Please ensure it is a valid .gz or .json backup.');
+        this.isImporting.set(false);
+      }
+    } catch (e) {
+      console.error('Import failed:', e);
+      this.importStatusMessage.set('An error occurred during import.');
+      this.isImporting.set(false);
+    }
   }
 
   onLogout(): void {

@@ -1,6 +1,4 @@
 .dashboard-container {
-  min-height: 100vh;
-  background: radial-gradient(circle at 10% 20%, #f4f6f3 0%, #e6eae4 90%);
   color: #2e3d30;
   font-family: 'Inter', sans-serif;
   padding: 0 0 60px 0;
@@ -152,6 +150,8 @@
     line-height: 1;
     filter: drop-shadow(0 0 8px rgba(44, 76, 56, 0.12));
     transition: transform 0.2s ease;
+    margin-top: auto;
+    margin-bottom: auto;
   }
 
   h2 {
@@ -191,7 +191,8 @@
     transition: all 0.3s ease;
 
     @media (max-width: 768px) {
-      min-height: 135px; /* ~5 rows height on mobile view */
+      min-height: 135px;
+      /* ~5 rows height on mobile view */
     }
 
     &:focus {
@@ -224,15 +225,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #2c4c38 0%, #142f1a 100%);
-  color: #ffffff;
-  box-shadow: 0 4px 15px rgba(20, 47, 26, 0.2);
-
-  &:not([disabled]):hover {
-    background: linear-gradient(135deg, #3d644c 0%, #1c3d26 100%);
-    box-shadow: 0 6px 20px rgba(20, 47, 26, 0.3);
-    transform: translateY(-1px);
-  }
+  padding: 12px 24px;
 }
 
 .btn-outline {
@@ -1473,17 +1466,7 @@
 }
 
 // Physical Activity Widget & Suggestions
-.activity-widget {
-  .btn-activity {
-    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
-    box-shadow: 0 4px 15px rgba(30, 64, 175, 0.2);
 
-    &:hover:not([disabled]) {
-      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-      box-shadow: 0 6px 20px rgba(30, 64, 175, 0.3);
-    }
-  }
-}
 
 .activity-suggestions {
   display: flex;

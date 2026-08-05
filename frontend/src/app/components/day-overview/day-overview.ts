@@ -8,12 +8,12 @@ import {
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../services/auth';
-import { NavigationComponent } from '../navigation/navigation';
+import { LogsStateService } from '../../services/logs-state';
 
 @Component({
   selector: 'app-day-overview',
   standalone: true,
-  imports: [CommonModule, NavigationComponent],
+  imports: [CommonModule],
   templateUrl: './day-overview.html',
   styleUrl: './day-overview.scss',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -22,6 +22,7 @@ export class DayOverviewComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
+  private readonly logsState = inject(LogsStateService);
 
   dateParam = signal('');
   formattedDateLabel = signal('');
@@ -47,7 +48,7 @@ export class DayOverviewComponent implements OnInit {
     }
 
     this.isLoading.set(true);
-    this.authService.getDayOverview(userid, dateStr).subscribe({
+    this.logsState.getDayOverview(this.authService, userid, dateStr).subscribe({
       next: (data) => {
         this.dayData.set(data);
         this.isLoading.set(false);

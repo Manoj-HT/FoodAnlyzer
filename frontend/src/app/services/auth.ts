@@ -237,19 +237,25 @@ export class AuthService {
   }
 
   isLoggedIn(): boolean {
-    return !!this.getUserId();
+    const userid = this.getUserId();
+    const token = this.getToken();
+    return !!userid && !!token;
   }
 
   logout(): void {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user_profile');
-    this.currentUser.set(null);
+    this.clearSession();
   }
 
   clearSession(): void {
     localStorage.removeItem('userid');
     localStorage.removeItem('token');
     localStorage.removeItem('user_profile');
+    localStorage.removeItem('cached_recommendations_stream');
+    localStorage.removeItem('cached_graph_data');
+    localStorage.removeItem('cached_day_overviews');
+    for (let w = 0; w <= 3; w++) {
+      localStorage.removeItem(`cached_unified_logs_week_${w}`);
+    }
     this.currentUser.set(null);
   }
 }

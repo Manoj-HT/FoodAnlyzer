@@ -150,7 +150,7 @@ def call_llm_api(prompt: str, response_json: bool = True) -> Optional[str]:
         api_key = os.environ.get("GEMINI_API_KEY")
         if api_key:
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
                 payload = {
                     "contents": [{"parts": [{"text": prompt}]}],
                 }
@@ -664,7 +664,7 @@ def call_gemini_multimodal_api(image_bytes: bytes, mime_type: str, prompt: str) 
     try:
         import base64
         encoded_image = base64.b64encode(image_bytes).decode('utf-8')
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
         payload = {
             "contents": [{
                 "parts": [
@@ -2344,7 +2344,7 @@ def generate_insights_via_llm(user: UserInDB, report_data: dict) -> list:
         api_key = os.environ.get("GEMINI_API_KEY")
         if api_key:
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
                 payload = {
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {
@@ -2495,6 +2495,19 @@ def get_user_recommendations(userid: str, regenerate: bool = False):
     }
 
 
+def get_active_llm_engine() -> str:
+    if LLM_PROVIDER == "gemini":
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if api_key:
+            return "Gemini 2.0 Flash"
+        return "SYSTEM"
+    elif LLM_PROVIDER == "ollama":
+        if OLLAMA_MODEL:
+            return f"Ollama ({OLLAMA_MODEL})"
+        return "Ollama SLM"
+    return "SYSTEM"
+
+
 def stream_recommendations_generator(userid: str, regenerate: bool = False):
     user = USERS_BY_ID.get(userid)
     if not user:
@@ -2516,37 +2529,43 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
 
     # 2. Check if cached
     is_cached = (user.report_cache == current_report_data and len(user.insights) > 0 and not regenerate)
+    active_engine = get_active_llm_engine()
 
     if is_cached:
-        print(f"\n[STREAM ENGINE] User: {user.name} ({user.id}) | CACHED - Serving existing insights (version {user.insight_version})")
+        cached_engine = user.report_cache.get("engine", active_engine) if isinstance(user.report_cache, dict) else active_engine
+        print(f"\n[STREAM ENGINE] User: {user.name} ({user.id}) | CACHED - Serving existing insights (engine: {cached_engine}, version {user.insight_version})")
         meta = {
             "type": "meta",
             "cached": True,
+            "engine": cached_engine,
             "monthly_data": {
                 **current_report_data,
                 "snapshot_version": "1.0.0",
                 "last_insight_generated_time": user.last_insight_generated_time,
                 "insight_version": user.insight_version,
                 "insights": user.insights,
-                "report_cache": user.report_cache
+                "report_cache": user.report_cache,
+                "engine": cached_engine
             },
             "weekly_reports": weekly_reports
         }
         yield json.dumps(meta) + "\n"
         return
     else:
-        print(f"\n[STREAM ENGINE] User: {user.name} ({user.id}) | GENERATING FRESH INSIGHTS")
+        print(f"\n[STREAM ENGINE] User: {user.name} ({user.id}) | GENERATING FRESH INSIGHTS | Engine: {active_engine}")
         # Cache miss: send metadata first (with insights empty)
         meta = {
             "type": "meta",
             "cached": False,
+            "engine": active_engine,
             "monthly_data": {
                 **current_report_data,
                 "snapshot_version": "1.0.0",
                 "last_insight_generated_time": "",
                 "insight_version": user.insight_version,
                 "insights": [],
-                "report_cache": {}
+                "report_cache": {},
+                "engine": active_engine
             },
             "weekly_reports": weekly_reports
         }
@@ -2584,15 +2603,13 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
                 success = True
             except Exception as e:
                 print(f"[STREAM ENGINE] ERROR streaming from Ollama: {e}")
-                yield json.dumps({"type": "error", "detail": f"Ollama error: {str(e)}"}) + "\n"
 
         elif LLM_PROVIDER == "gemini":
             api_key = os.environ.get("GEMINI_API_KEY")
             if api_key:
-                print(f"[STREAM ENGINE] -> Active Engine: GEMINI (gemini-1.5-flash API)")
+                print(f"[STREAM ENGINE] -> Active Engine: GEMINI (gemini-2.0-flash API)")
                 try:
-                    # For Gemini, we make a live call, retrieve the text, and stream it locally
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
                     payload = {
                         "contents": [{"parts": [{"text": prompt}]}],
                         "generationConfig": {
@@ -2609,7 +2626,6 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
                         res = json.loads(response.read().decode('utf-8'))
                         text_response = res["candidates"][0]["content"]["parts"][0]["text"]
                         full_raw_text = text_response
-                        # Stream the characters back to the UI to simulate typing
                         import time
                         for char in full_raw_text:
                             yield json.dumps({"type": "token", "token": char}) + "\n"
@@ -2617,7 +2633,6 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
                     success = True
                 except Exception as e:
                     print(f"[STREAM ENGINE] ERROR calling Gemini for stream: {e}")
-                    yield json.dumps({"type": "error", "detail": f"Gemini error: {str(e)}"}) + "\n"
             else:
                 print("[STREAM ENGINE] GEMINI provider selected, but GEMINI_API_KEY is missing in environment!")
 
@@ -2628,14 +2643,15 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
                 if "insights" in data and isinstance(data["insights"], list):
                     insights = [str(pt) for pt in data["insights"]]
             except Exception:
-                # Regex parsing fallback
                 import re
                 insights = re.findall(r'"([^"]*)"', full_raw_text)
                 insights = [pt for pt in insights if len(pt) > 10 and pt != "insights"]
 
-        # If LLM execution failed or returned empty insights, run local fallback
+        # If LLM execution failed or returned empty insights, run SYSTEM heuristic engine
         if not insights:
-            print(f"[STREAM ENGINE] -> Active Engine: FALLBACK HEURISTIC ENGINE (LLM returned empty or unavailable)")
+            active_engine = "SYSTEM"
+            print(f"[STREAM ENGINE] -> Active Engine: SYSTEM (LLM returned empty or unavailable)")
+            yield json.dumps({"type": "status", "engine": "SYSTEM"}) + "\n"
             insights = generate_fallback_insights(user, current_report_data)
             fallback_json = json.dumps({"insights": insights}, indent=2)
             import time
@@ -2643,10 +2659,10 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
                 yield json.dumps({"type": "token", "token": char}) + "\n"
                 time.sleep(0.002)
         else:
-            print(f"[STREAM ENGINE] -> SUCCESS: Streamed {len(insights)} insight points using {LLM_PROVIDER}")
+            print(f"[STREAM ENGINE] -> SUCCESS: Streamed {len(insights)} insight points using {active_engine}")
 
         # Update cache on user DB
-        user.report_cache = current_report_data
+        user.report_cache = {**current_report_data, "engine": active_engine}
         user.insights = insights
         user.last_insight_generated_time = datetime.now().isoformat()
         user.insight_version += 1
@@ -2655,6 +2671,7 @@ def stream_recommendations_generator(userid: str, regenerate: bool = False):
         # Send final completion event
         yield json.dumps({
             "type": "done",
+            "engine": active_engine,
             "insights": insights,
             "insight_version": user.insight_version,
             "last_insight_generated_time": user.last_insight_generated_time
@@ -2826,16 +2843,20 @@ def stateless_stream_recommendations_generator(payload: StatelessStreamPayload):
         virtual_user.id = payload.user_id
     virtual_user.structured_details = {"userdetails": payload.user_details or ""}
 
+    active_engine = get_active_llm_engine()
+
     meta = {
         "type": "meta",
         "cached": False,
+        "engine": active_engine,
         "monthly_data": {
             **current_report_data,
             "snapshot_version": "1.0.0",
             "last_insight_generated_time": "",
             "insight_version": 1,
             "insights": [],
-            "report_cache": {}
+            "report_cache": {},
+            "engine": active_engine
         },
         "weekly_reports": weekly_reports
     }
@@ -2872,14 +2893,13 @@ def stateless_stream_recommendations_generator(payload: StatelessStreamPayload):
             success = True
         except Exception as e:
             print(f"[STATELESS STREAM ENGINE] ERROR streaming from Ollama: {e}")
-            yield json.dumps({"type": "error", "detail": f"Ollama error: {str(e)}"}) + "\n"
 
     elif LLM_PROVIDER == "gemini":
         api_key = os.environ.get("GEMINI_API_KEY")
         if api_key:
-            print(f"[STATELESS STREAM ENGINE] -> Active Engine: GEMINI (gemini-1.5-flash API)")
+            print(f"[STATELESS STREAM ENGINE] -> Active Engine: GEMINI (gemini-2.0-flash API)")
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
                 gemini_payload = {
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {
@@ -2902,8 +2922,7 @@ def stateless_stream_recommendations_generator(payload: StatelessStreamPayload):
                         time.sleep(0.001)
                 success = True
             except Exception as e:
-                print(f"[STATELESS STREAM ENGINE] ERROR calling Gemini for stream: {e}")
-                yield json.dumps({"type": "error", "detail": f"Gemini error: {str(e)}"}) + "\n"
+                print(f"[STREAM ENGINE] ERROR calling Gemini for stream: {e}, falling back to heuristic engine.")
 
     if success and full_raw_text:
         try:
@@ -2916,7 +2935,9 @@ def stateless_stream_recommendations_generator(payload: StatelessStreamPayload):
             insights = [pt for pt in insights if len(pt) > 10 and pt != "insights"]
 
     if not insights:
-        print(f"[STATELESS STREAM ENGINE] -> Active Engine: FALLBACK HEURISTIC ENGINE")
+        active_engine = "SYSTEM"
+        print(f"[STATELESS STREAM ENGINE] -> Active Engine: SYSTEM (Heuristic engine active)")
+        yield json.dumps({"type": "status", "engine": "SYSTEM"}) + "\n"
         insights = generate_fallback_insights(virtual_user, current_report_data)
         fallback_json = json.dumps({"insights": insights}, indent=2)
         import time
@@ -2926,6 +2947,7 @@ def stateless_stream_recommendations_generator(payload: StatelessStreamPayload):
 
     yield json.dumps({
         "type": "done",
+        "engine": active_engine,
         "insights": insights,
         "insight_version": 1,
         "last_insight_generated_time": datetime.now().isoformat()
@@ -3288,8 +3310,6 @@ def get_graph_data(userid: str):
     
     for day in range(1, num_days + 1):
         d_str = f"{year:04d}-{month:02d}-{day:02d}"
-        d_label = f"{calendar.month_abbr[month]} {day}"
-        daily_labels.append(d_label)
         
         day_meals = [m for m in meal_logs if m["time"].startswith(d_str)]
         day_acts = [a for a in act_logs if a["time"].startswith(d_str)]
@@ -3311,7 +3331,6 @@ def get_graph_data(userid: str):
         daily_vitamins.append(v_score)
         
     # 2. WEEKLY VIEW: Weeks of the month (Week 1, Week 2, Week 3, Week 4)
-    weekly_labels = ["Week 1 (Days 1-7)", "Week 2 (Days 8-14)", "Week 3 (Days 15-21)", "Week 4 (Days 22+)"]
     weekly_calories_burned = []
     weekly_protein = []
     weekly_fibre = []
@@ -3322,11 +3341,11 @@ def get_graph_data(userid: str):
         (0, 7),
         (7, 14),
         (14, 21),
-        (21, len(daily_labels))
+        (21, num_days)
     ]
     
     for start_idx, end_idx in slices:
-        if start_idx < len(daily_labels):
+        if start_idx < num_days:
             cnt = max(1, end_idx - start_idx)
             w_c_burn = int(sum(daily_calories_burned[start_idx:end_idx]) / cnt)
             w_prot = int(sum(daily_protein[start_idx:end_idx]) / cnt)
@@ -3343,7 +3362,6 @@ def get_graph_data(userid: str):
         weekly_vitamins.append(w_vit)
         
     # 3. MONTHLY VIEW: All 12 months in the year
-    monthly_labels = [calendar.month_abbr[m] for m in range(1, 13)]
     monthly_calories_burned = []
     monthly_protein = []
     monthly_fibre = []
@@ -3381,7 +3399,6 @@ def get_graph_data(userid: str):
         
     return {
         "daily": {
-            "labels": daily_labels,
             "calories_burned": daily_calories_burned,
             "protein": daily_protein,
             "fibre": daily_fibre,
@@ -3389,7 +3406,6 @@ def get_graph_data(userid: str):
             "vitamins": daily_vitamins
         },
         "weekly": {
-            "labels": weekly_labels,
             "calories_burned": weekly_calories_burned,
             "protein": weekly_protein,
             "fibre": weekly_fibre,
@@ -3397,7 +3413,6 @@ def get_graph_data(userid: str):
             "vitamins": weekly_vitamins
         },
         "monthly": {
-            "labels": monthly_labels,
             "calories_burned": monthly_calories_burned,
             "protein": monthly_protein,
             "fibre": monthly_fibre,

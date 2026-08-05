@@ -1,6 +1,4 @@
 .logs-page-container {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #f4f7f5 0%, #e9efe9 50%, #dfebdf 100%);
   font-family: 'Inter', sans-serif;
   box-sizing: border-box;
 }
@@ -13,13 +11,26 @@
 
 .logs-header-section {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
+  text-align: center;
+  justify-content: center;
   margin-bottom: 30px;
-  flex-wrap: wrap;
-  gap: 20px;
+  gap: 16px;
 
   .header-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+
+    .header-emoji {
+      font-size: 2.8rem;
+      margin-bottom: 6px;
+      line-height: 1;
+      filter: drop-shadow(0 4px 12px rgba(44, 76, 56, 0.15));
+    }
+
     h2 {
       font-family: 'Outfit', sans-serif;
       font-size: 2.2rem;
@@ -27,12 +38,15 @@
       color: #111827;
       margin: 0 0 8px 0;
       letter-spacing: -0.5px;
+      text-align: center;
     }
 
     .subtitle {
       font-size: 1.05rem;
       color: #4b5563;
       margin: 0;
+      text-align: center;
+      max-width: 600px;
     }
   }
 }
@@ -629,21 +643,9 @@
 
 // Day Summary Button & Overview Modal Styles
 .btn-day-summary {
-  background: rgba(45, 76, 57, 0.08);
-  border: 1px solid rgba(45, 76, 57, 0.15);
-  color: #2d4c39;
-  border-radius: 12px;
-  padding: 4px 10px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  cursor: pointer;
-  margin-top: 6px;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: #2d4c39;
-    color: #ffffff;
-  }
+  padding: 5px 12px !important;
+  font-size: 0.76rem !important;
+  margin-top: 4px;
 }
 
 .activity-section {

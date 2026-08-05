@@ -1,6 +1,4 @@
 .profile-page-container {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #f3f8f5 0%, #e6efe7 50%, #d8ebd9 100%);
   font-family: 'Inter', sans-serif;
   box-sizing: border-box;
 }
@@ -133,7 +131,7 @@
 
   .section-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     flex-wrap: wrap;
     gap: 12px;
@@ -251,6 +249,13 @@
       box-shadow: 0 4px 14px rgba(59, 130, 246, 0.15);
     }
 
+    &.btn-import:hover {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.15);
+    }
+
     &.btn-logout:hover {
       background: #fef2f2;
       border-color: #fecaca;
@@ -268,6 +273,31 @@
     font-size: 0.9rem;
     color: #4b5563;
     margin-bottom: 14px;
+  }
+
+  .file-name-tag {
+    font-size: 0.88rem;
+    color: #374151;
+    background: #f3f4f6;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin: 8px 0 14px 0;
+  }
+
+  .status-msg {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+
+    &.success {
+      background: #f0fdf4;
+      color: #166534;
+      border-color: #bbf7d0;
+    }
   }
 
   .textarea-container {
@@ -325,7 +355,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 600px) {

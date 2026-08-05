@@ -15,8 +15,8 @@ import { IndexedDbService } from '../../services/indexed-db';
 import { DeviceCapabilityService } from '../../services/device-capability';
 import { MediaPreviewService, MediaPreviewItem } from '../../services/media-preview';
 import { ModalComponent } from '../../utilities/components/modal/modal';
-import { NavigationComponent } from '../navigation/navigation';
 import { AccordionStateService } from '../../services/accordion-state';
+import { LogsStateService } from '../../services/logs-state';
 
 export interface MealBreakdown {
   calories: number;
@@ -46,7 +46,7 @@ export interface ActivityBreakdown {
 @Component({
   selector: 'app-what-you-ate-today',
   standalone: true,
-  imports: [FormsModule, ModalComponent, NavigationComponent],
+  imports: [FormsModule, ModalComponent],
   templateUrl: './what-you-ate-today.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './what-you-ate-today.scss',
@@ -59,6 +59,7 @@ export class WhatYouAteTodayComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly mediaPreviewService = inject(MediaPreviewService);
   readonly accordionService = inject(AccordionStateService);
+  private readonly logsState = inject(LogsStateService);
 
   userName = signal('Member');
   userEmail = signal('');
@@ -702,6 +703,7 @@ export class WhatYouAteTodayComponent implements OnInit {
 
     this.authService.addMealLog(userid, payload).subscribe({
       next: () => {
+        this.logsState.invalidateCache();
         // Show success modal
         this.isSuccessModalOpen.set(true);
 
@@ -800,6 +802,7 @@ export class WhatYouAteTodayComponent implements OnInit {
 
     this.authService.addActivityLog(userid, payload).subscribe({
       next: () => {
+        this.logsState.invalidateCache();
         this.isActivitySuccessModalOpen.set(true);
         this.activityInput.set('');
         this.showActivityResult.set(false);

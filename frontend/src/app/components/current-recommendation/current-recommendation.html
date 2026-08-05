@@ -1,10 +1,8 @@
 <div class="recommendations-page-container">
-  <!-- Shared Navigation Component -->
-  <app-navigation></app-navigation>
-
   <main class="recommendations-content">
     <div class="recommendations-header-section">
-      <h2>💡 Personalized Recommendations</h2>
+      <div class="header-emoji">💡</div>
+      <h2>Personalized Recommendations</h2>
       <p class="subtitle">Tailored nutrition insights, monthly consolidations, and weekly aggregation history.</p>
     </div>
 
@@ -34,7 +32,7 @@
             <h4>Monthly AI Insights</h4>
             <div class="meta-row">
               <span class="meta-pill">v{{ monthlyData().insight_version }}</span>
-              <span class="meta-pill">Snapshot 1.0.0</span>
+              <span class="meta-pill">Engine: {{ monthlyData().engine || activeEngine() }}</span>
             </div>
           </div>
         </div>
@@ -53,7 +51,7 @@
             <span class="dot red"></span>
             <span class="dot yellow"></span>
             <span class="dot green"></span>
-            <span class="terminal-title">Console Output - gemma3:4b</span>
+            <span class="terminal-title">Console Output - {{ activeEngine() }}</span>
           </div>
           <pre class="terminal-body"><code>{{ streamText() }}</code><span class="cursor">_</span></pre>
         </div>
@@ -129,6 +127,7 @@
       </div>
 
       <!-- Time of Consumption Card -->
+      @if (monthlyData().time_of_consumption) {
       <div class="snapshot-card glass-card">
         <div class="card-inner-header">
           <span class="small-emoji">⏰</span>
@@ -137,26 +136,27 @@
         <div class="times-list">
           <div class="time-item">
             <span class="time-name">🌅 Morning</span>
-            <span class="time-val">{{ monthlyData().time_of_consumption.morning.avg_time }} ({{
-              monthlyData().time_of_consumption.morning.count }} meals)</span>
+            <span class="time-val">{{ monthlyData().time_of_consumption?.morning?.avg_time || 'N/A' }} ({{
+              monthlyData().time_of_consumption?.morning?.count || 0 }} meals)</span>
           </div>
           <div class="time-item">
             <span class="time-name">☀️ Afternoon</span>
-            <span class="time-val">{{ monthlyData().time_of_consumption.afternoon.avg_time }} ({{
-              monthlyData().time_of_consumption.afternoon.count }} meals)</span>
+            <span class="time-val">{{ monthlyData().time_of_consumption?.afternoon?.avg_time || 'N/A' }} ({{
+              monthlyData().time_of_consumption?.afternoon?.count || 0 }} meals)</span>
           </div>
           <div class="time-item">
             <span class="time-name">🌆 Evening</span>
-            <span class="time-val">{{ monthlyData().time_of_consumption.evening.avg_time }} ({{
-              monthlyData().time_of_consumption.evening.count }} meals)</span>
+            <span class="time-val">{{ monthlyData().time_of_consumption?.evening?.avg_time || 'N/A' }} ({{
+              monthlyData().time_of_consumption?.evening?.count || 0 }} meals)</span>
           </div>
           <div class="time-item">
             <span class="time-name">🌙 Night</span>
-            <span class="time-val">{{ monthlyData().time_of_consumption.night.avg_time }} ({{
-              monthlyData().time_of_consumption.night.count }} meals)</span>
+            <span class="time-val">{{ monthlyData().time_of_consumption?.night?.avg_time || 'N/A' }} ({{
+              monthlyData().time_of_consumption?.night?.count || 0 }} meals)</span>
           </div>
         </div>
       </div>
+      }
 
       <!-- Physical Activity Summary Card -->
       <div class="snapshot-card glass-card">
@@ -311,15 +311,16 @@
     <!-- Baseline Guidelines (Existing Cards) -->
     <h3 class="section-title">📋 Baseline Health Guidelines</h3>
     <div class="recommendation-grid">
-      @for (card of recommendations(); track card.title) {
+      @for (card of recommendations(); track card.title || $index) {
       <div class="recommendation-card glass-card">
         <header class="card-header">
-          <span class="card-emoji">{{ card.emoji }}</span>
-          <h4>{{ card.title }}</h4>
+          <span class="card-emoji">{{ card.emoji || '💡' }}</span>
+          <h4>{{ card.title || 'Baseline Guideline' }}</h4>
         </header>
 
-        <p class="card-description">{{ card.description }}</p>
+        <p class="card-description">{{ card.description || 'General health and nutrition recommendation.' }}</p>
 
+        @if (card.tips && card.tips.length > 0) {
         <div class="card-tips">
           <label>Recommended Actions:</label>
           <ul>
@@ -331,6 +332,7 @@
             }
           </ul>
         </div>
+        }
       </div>
       }
     </div>

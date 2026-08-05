@@ -10,7 +10,7 @@ import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { AuthService } from '../../services/auth';
-import { NavigationComponent } from '../navigation/navigation';
+import { LogsStateService } from '../../services/logs-state';
 import { ModalComponent } from '../../utilities/components/modal/modal';
 
 interface MealLog {
@@ -58,13 +58,14 @@ interface DayColumn {
 @Component({
   selector: 'app-your-logs',
   standalone: true,
-  imports: [CommonModule, NavigationComponent, ModalComponent],
+  imports: [CommonModule, ModalComponent],
   templateUrl: './your-logs.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './your-logs.scss',
 })
 export class YourLogsComponent implements OnInit {
   private readonly authService = inject(AuthService);
+  private readonly logsState = inject(LogsStateService);
   private readonly router = inject(Router);
 
   logs = signal<MealLog[]>([]);
@@ -184,7 +185,7 @@ export class YourLogsComponent implements OnInit {
     const userid = this.authService.getUserId();
     if (userid) {
       this.isLoading.set(true);
-      this.authService.getUnifiedLogs(userid, this.weekOffset()).subscribe({
+      this.logsState.getUnifiedLogs(this.authService, userid, this.weekOffset()).subscribe({
         next: (res) => {
           this.logs.set(res.food_logs || []);
           this.inferredLogs.set(res.inferred_logs || []);

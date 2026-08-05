@@ -1,7 +1,4 @@
 <div class="profile-page-container">
-  <!-- Navigation Header -->
-  <app-navigation></app-navigation>
-
   <main class="profile-content">
     <div class="profile-header-section">
       <h2>Member Profile</h2>
@@ -45,15 +42,26 @@
 
       <!-- Account Actions Section -->
       <div class="account-actions-section">
-        <h3>⚙️ Account & Data Management</h3>
-        <p class="actions-desc">Export your local IndexedDB backup or safely sign out of your account.</p>
+        <h3>⚙️ Manage your data</h3>
+        <p class="actions-desc">Import or export your health data backup, or safely sign out of your account.</p>
+
+        <!-- Hidden File Input for Import -->
+        <input type="file" #fileInput accept=".gz,.json,application/gzip,application/json" (change)="onFileSelected($event)" style="display: none;" />
 
         <div class="actions-grid">
           <button type="button" class="btn btn-action btn-export" (click)="exportData()">
             <span class="btn-icon">💾</span>
             <div class="btn-text-block">
-              <strong>Export Health Backup</strong>
-              <span>Download 9-month compressed JSON data</span>
+              <strong>Export Data</strong>
+              <span>Download compressed .gz backup</span>
+            </div>
+          </button>
+
+          <button type="button" class="btn btn-action btn-import" (click)="triggerImportFileSelect()">
+            <span class="btn-icon">📥</span>
+            <div class="btn-text-block">
+              <strong>Import Data</strong>
+              <span>Restore backup from .gz or JSON file</span>
             </div>
           </button>
 
@@ -90,6 +98,36 @@
           <span class="small-spinner"></span> Updating...
         } @else {
           Save Changes
+        }
+      </button>
+    </div>
+  </app-modal>
+
+  <!-- Import Confirmation Modal -->
+  <app-modal [title]="'Manage your data'" [(isOpen)]="isImportModalOpen">
+    <div body class="details-modal-body">
+      <p class="details-modal-desc">
+        This will override the existing data. Do you want to proceed?
+      </p>
+
+      @if (selectedImportFile) {
+        <p class="file-name-tag">📁 Selected file: <strong>{{ selectedImportFile.name }}</strong></p>
+      }
+
+      @if (importStatusMessage()) {
+        <div class="status-msg" [class.success]="importStatusMessage().includes('successfully')">
+          {{ importStatusMessage() }}
+        </div>
+      }
+    </div>
+
+    <div footer class="details-modal-footer">
+      <button type="button" class="btn btn-cancel" [disabled]="isImporting()" (click)="cancelImport()">Cancel</button>
+      <button type="button" class="btn btn-primary" [disabled]="isImporting()" (click)="confirmImport()">
+        @if (isImporting()) {
+          <span class="small-spinner"></span> Importing...
+        } @else {
+          Okay
         }
       </button>
     </div>

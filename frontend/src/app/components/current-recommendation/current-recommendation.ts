@@ -1,10 +1,10 @@
-import { Component, OnInit, OnDestroy, ElementRef, ViewChild, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild, inject, signal, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import Chart from 'chart.js/auto';
 import { AuthService } from '../../services/auth';
 import { IndexedDbService } from '../../services/indexed-db';
-import { NavigationComponent } from '../navigation/navigation';
+import { LogsStateService } from '../../services/logs-state';
 
 interface RecommendationCard {
   title: string;
@@ -16,7 +16,7 @@ interface RecommendationCard {
 @Component({
   selector: 'app-current-recommendation',
   standalone: true,
-  imports: [CommonModule, FormsModule, NavigationComponent],
+  imports: [CommonModule, FormsModule],
   templateUrl: './current-recommendation.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './current-recommendation.scss',
@@ -24,6 +24,8 @@ interface RecommendationCard {
 export class CurrentRecommendationComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly dbService = inject(IndexedDbService);
+  private readonly logsState = inject(LogsStateService);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   isLoading = signal(true);
   isGenerating = signal(false);
@@ -63,10 +65,26 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
       this.fetchGraphData(userid);
     } else {
       this.isLoading.set(false);
+      this.cdr.markForCheck();
     }
   }
 
   async fetchRecommendationsStream(userid: string, regenerate: boolean = false): Promise<void> {
+    // Check if valid monthly cached recommendation stream exists
+    if (!regenerate) {
+      const cached = this.logsState.getCachedStream();
+      if (cached) {
+        this.monthlyData.set(cached.monthlyData);
+        this.weeklyReports.set(cached.weeklyReports || []);
+        this.streamText.set(cached.streamText || '');
+        this.isGenerating.set(false);
+        this.isLoading.set(false);
+        this.cdr.markForCheck();
+        setTimeout(() => this.renderChart(), 100);
+        return;
+      }
+    }
+
     try {
       const [meals, activities, profile, monthlyAggs] = await Promise.all([
         this.dbService.getMealLogs(userid),
@@ -75,10 +93,13 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
         this.dbService.getMonthlyAggregates(userid)
       ]);
 
+      const userDetails = profile?.structured_details ? JSON.stringify(profile.structured_details) : this.rawBio();
+      this.generateRecommendations(userDetails, []);
+
       const payload = {
         user_id: userid,
         user_name: profile?.name || this.userName(),
-        user_details: profile?.structured_details ? JSON.stringify(profile.structured_details) : this.rawBio(),
+        user_details: userDetails,
         meal_logs: meals,
         activity_logs: activities,
         monthly_aggregates: monthlyAggs,
@@ -147,14 +168,30 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
       } catch (fallbackErr) {
         console.error('Fallback load failed:', fallbackErr);
         this.isLoading.set(false);
+        this.cdr.markForCheck();
       }
     }
   }
 
+  activeEngine = signal<string>('SYSTEM');
+
   handleStreamMessage(data: any): void {
+    if (data.engine) {
+      const displayEngine = data.engine === 'fallback' ? 'SYSTEM' : data.engine;
+      this.activeEngine.set(displayEngine);
+    }
+
     if (data.type === 'meta') {
       this.weeklyReports.set(data.weekly_reports || []);
       this.monthlyData.set(data.monthly_data);
+
+      if (data.engine) {
+        const displayEngine = data.engine === 'fallback' ? 'SYSTEM' : data.engine;
+        this.activeEngine.set(displayEngine);
+      } else if (data.monthly_data?.engine) {
+        const displayEngine = data.monthly_data.engine === 'fallback' ? 'SYSTEM' : data.monthly_data.engine;
+        this.activeEngine.set(displayEngine);
+      }
 
       if (data.cached) {
         this.isGenerating.set(false);
@@ -164,10 +201,24 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
         this.streamText.set('');
         this.isLoading.set(false);
       }
+      this.cdr.markForCheck();
+      setTimeout(() => this.renderChart(), 100);
+    } else if (data.type === 'status') {
+      if (data.engine) {
+        const displayEngine = data.engine === 'fallback' ? 'SYSTEM' : data.engine;
+        this.activeEngine.set(displayEngine);
+      }
+      this.cdr.markForCheck();
     } else if (data.type === 'token') {
       this.streamText.set(this.streamText() + data.token);
+      this.cdr.markForCheck();
     } else if (data.type === 'done') {
       this.isGenerating.set(false);
+      if (data.engine) {
+        const displayEngine = data.engine === 'fallback' ? 'SYSTEM' : data.engine;
+        this.activeEngine.set(displayEngine);
+      }
+
       // Update monthlyData with the finalized insights list
       const current = this.monthlyData();
       if (current) {
@@ -176,8 +227,18 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
           insights: data.insights,
           insight_version: data.insight_version,
           last_insight_generated_time: data.last_insight_generated_time,
+          engine: this.activeEngine()
         });
       }
+
+      // Cache the complete recommendations stream with monthly timestamp
+      this.logsState.setCachedStream(
+        this.streamText(),
+        this.monthlyData(),
+        this.weeklyReports()
+      );
+      this.cdr.markForCheck();
+      setTimeout(() => this.renderChart(), 100);
     } else if (data.type === 'error') {
       console.error('Error emitted in backend stream:', data.detail);
     }
@@ -351,9 +412,9 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
       });
     }
 
-    // Fallback card if empty
+    // Fallback cards if empty
     if (cards.length === 0) {
-      goals.push('General Nutrition Improvement');
+      goals.push('General Health & Micronutrient Density');
       cards.push({
         title: 'Foundational Healthy Eating',
         emoji: '🥦',
@@ -365,10 +426,32 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
           'Minimize highly processed foods, excess refined sugars, and trans-fats.',
         ],
       });
+      cards.push({
+        title: 'Hydration & Daily Movement',
+        emoji: '💧',
+        description:
+          'Adequate daily hydration and light movement are foundational for metabolic health.',
+        tips: [
+          'Drink a glass of water first thing upon waking up in the morning.',
+          'Aim for at least 30 minutes of light or moderate physical activity daily.',
+          'Take short movement breaks every hour during sedentary desk work.',
+        ],
+      });
+      cards.push({
+        title: 'Sleep & Recovery Balance',
+        emoji: '🌙',
+        description:
+          'Restorative sleep regulates appetite hormones (ghrelin and leptin) and lowers cortisol levels.',
+        tips: [
+          'Maintain a consistent sleep routine aiming for 7-9 hours per night.',
+          'Limit caffeine and heavy meals 4 hours before bedtime.',
+        ],
+      });
     }
 
     this.wellnessGoals.set(goals);
     this.recommendations.set(cards);
+    this.cdr.markForCheck();
   }
 
   regenerateInsights(): void {
@@ -384,36 +467,70 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
 
   fetchGraphData(userid: string): void {
     this.isGraphLoading.set(true);
-    this.authService.getGraphData(userid).subscribe({
+    this.logsState.getGraphData(this.authService, userid).subscribe({
       next: (data) => {
         this.graphData.set(data);
         this.isGraphLoading.set(false);
-        setTimeout(() => this.renderChart(), 50);
+        this.cdr.markForCheck();
+        setTimeout(() => this.renderChart(), 100);
       },
       error: (err) => {
         console.error('Failed to load analytics graph data:', err);
         this.isGraphLoading.set(false);
+        this.cdr.markForCheck();
       }
     });
   }
 
   renderChart(): void {
-    if (!this.analyticsCanvasRef?.nativeElement || !this.graphData()) return;
+    const canvas = this.analyticsCanvasRef?.nativeElement;
+    if (!canvas) {
+      setTimeout(() => this.renderChart(), 100);
+      return;
+    }
 
-    const ctx = this.analyticsCanvasRef.nativeElement.getContext('2d');
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     if (this.chartInstance) {
       this.chartInstance.destroy();
+      this.chartInstance = null;
     }
 
     const timeframe = this.selectedTimeframe();
     const metric = this.selectedMetric();
-    const currentSet = this.graphData()[timeframe];
+    const data = this.graphData();
+    const currentSet = (data && data[timeframe]) ? data[timeframe] : {};
 
-    if (!currentSet) return;
+    let labels: string[] = [];
+    let defaultLen = 30;
 
-    const labels = currentSet.labels || [];
+    if (timeframe === 'daily') {
+      const now = new Date();
+      const monthAbbr = now.toLocaleString('en-US', { month: 'short' });
+      defaultLen = currentSet.calories_burned?.length || 30;
+      labels = Array.from({ length: defaultLen }, (_, i) => `${monthAbbr} ${i + 1}`);
+    } else if (timeframe === 'weekly') {
+      defaultLen = 4;
+      labels = ['Week 1 (Days 1-7)', 'Week 2 (Days 8-14)', 'Week 3 (Days 15-21)', 'Week 4 (Days 22+)'];
+    } else if (timeframe === 'monthly') {
+      defaultLen = 12;
+      labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    }
+
+    const safeCal = currentSet.calories_burned && currentSet.calories_burned.length ? currentSet.calories_burned : new Array(defaultLen).fill(0);
+    const safeProtein = currentSet.protein && currentSet.protein.length ? currentSet.protein : new Array(defaultLen).fill(0);
+    const safeFibre = currentSet.fibre && currentSet.fibre.length ? currentSet.fibre : new Array(defaultLen).fill(0);
+    const safeCarbs = currentSet.carbs && currentSet.carbs.length ? currentSet.carbs : new Array(defaultLen).fill(0);
+    const safeVitamins = currentSet.vitamins && currentSet.vitamins.length ? currentSet.vitamins : new Array(defaultLen).fill(0);
+
+    const safeSet: Record<string, number[]> = {
+      calories_burned: safeCal,
+      protein: safeProtein,
+      fibre: safeFibre,
+      carbs: safeCarbs,
+      vitamins: safeVitamins
+    };
 
     const metricConfigs: Record<string, { label: string; color: string; bgGradient: string }> = {
       calories_burned: {
@@ -450,7 +567,7 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
       datasets = [
         {
           label: '🔥 Calories Burned (kcal)',
-          data: currentSet['calories_burned'] || [],
+          data: safeSet['calories_burned'],
           borderColor: '#1d4ed8',
           backgroundColor: 'rgba(29, 78, 216, 0.08)',
           yAxisID: 'y',
@@ -462,7 +579,7 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
         },
         {
           label: '🥩 Protein (g)',
-          data: currentSet['protein'] || [],
+          data: safeSet['protein'],
           borderColor: '#10b981',
           backgroundColor: 'rgba(16, 185, 129, 0.08)',
           yAxisID: 'y1',
@@ -474,7 +591,7 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
         },
         {
           label: '🌾 Fibre (g)',
-          data: currentSet['fibre'] || [],
+          data: safeSet['fibre'],
           borderColor: '#059669',
           backgroundColor: 'rgba(5, 150, 105, 0.08)',
           yAxisID: 'y1',
@@ -486,7 +603,7 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
         },
         {
           label: '🍞 Carbs (g)',
-          data: currentSet['carbs'] || [],
+          data: safeSet['carbs'],
           borderColor: '#f59e0b',
           backgroundColor: 'rgba(245, 158, 11, 0.08)',
           yAxisID: 'y1',
@@ -498,7 +615,7 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
         },
         {
           label: '⚡ Vitamin Score',
-          data: currentSet['vitamins'] || [],
+          data: safeSet['vitamins'],
           borderColor: '#8b5cf6',
           backgroundColor: 'rgba(139, 92, 246, 0.08)',
           yAxisID: 'y1',
@@ -535,7 +652,7 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
         }
       };
     } else {
-      const values = currentSet[metric] || [];
+      const values = safeSet[metric] || safeSet['calories_burned'];
       const cfg = metricConfigs[metric] || metricConfigs['calories_burned'];
 
       datasets = [{

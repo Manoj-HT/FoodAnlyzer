@@ -6,11 +6,11 @@ import { YourLogsComponent } from './components/your-logs/your-logs';
 import { CurrentRecommendationComponent } from './components/current-recommendation/current-recommendation';
 import { DayOverviewComponent } from './components/day-overview/day-overview';
 import { ProfileComponent } from './components/profile/profile';
-import { authGuard } from './guards/auth';
+import { authGuard, guestGuard } from './guards/auth';
 
 export const routes: Routes = [
-  { path: 'login', component: LoginComponent },
-  { path: 'register', component: RegisterComponent },
+  { path: 'login', component: LoginComponent, canActivate: [guestGuard] },
+  { path: 'register', component: RegisterComponent, canActivate: [guestGuard] },
   { path: 'dashboard', component: WhatYouAteTodayComponent, canActivate: [authGuard] },
   { path: 'logs', component: YourLogsComponent, canActivate: [authGuard] },
   { path: 'day-overview/:date', component: DayOverviewComponent, canActivate: [authGuard] },

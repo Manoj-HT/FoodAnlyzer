@@ -337,3 +337,96 @@
     transform: translateY(0);
   }
 }
+
+/* Glassmorphism In-App Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(20, 47, 26, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  box-sizing: border-box;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.modal-card {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(44, 76, 56, 0.15);
+  border-radius: 24px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 400px;
+  padding: 32px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: modalPop 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+@keyframes modalPop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+
+  .google-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    h3 {
+      font-family: 'Outfit', 'Inter', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #142f1a;
+      margin: 0;
+    }
+  }
+
+  .modal-subtitle {
+    color: #4a5d4e;
+    font-size: 0.88rem;
+    margin: 0;
+  }
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.btn-secondary {
+  background: rgba(44, 76, 56, 0.08);
+  color: #2c4c38;
+  border: 1px solid rgba(44, 76, 56, 0.15);
+
+  &:hover {
+    background: rgba(44, 76, 56, 0.15);
+  }
+}

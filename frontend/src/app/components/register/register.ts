@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@ang
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 
 @Component({
   selector: 'app-register',
@@ -56,63 +57,131 @@ export class RegisterComponent implements OnInit {
     this.initGoogleOAuth();
   }
 
+  showGoogleModal = signal(false);
+  googleEmailInput = signal('');
   isGoogleInitialized = false;
 
   initGoogleOAuth(): void {
     if (this.isGoogleInitialized) return;
-    if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
-      try {
-        const clientId = this.authService.getGoogleClientId();
-        (window as any).google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response: any) => this.onGoogleCredentialReceived(response.credential)
-        });
-        this.isGoogleInitialized = true;
-      } catch (e) {
-        console.warn('Google GSI initialization warning:', e);
+    this.ensureGoogleScriptLoaded(() => {
+      if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
+        try {
+          const clientId = this.authService.getGoogleClientId();
+          (window as any).google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (response: any) => this.onGoogleCredentialReceived(response.credential)
+          });
+          this.isGoogleInitialized = true;
+        } catch (e) {
+          console.warn('Google GSI initialization warning:', e);
+        }
       }
+    });
+  }
+
+  ensureGoogleScriptLoaded(callback: () => void): void {
+    if (typeof window !== 'undefined' && (window as any).google?.accounts) {
+      callback();
+      return;
+    }
+    if (typeof document !== 'undefined') {
+      const existingScript = document.getElementById('google-gsi-script');
+      if (existingScript) {
+        existingScript.addEventListener('load', () => callback());
+        setTimeout(() => callback(), 800);
+        return;
+      }
+      const script = document.createElement('script');
+      script.id = 'google-gsi-script';
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => callback();
+      script.onerror = () => callback();
+      document.head.appendChild(script);
+    } else {
+      callback();
     }
   }
 
-  signInWithGoogle(): void {
-    if (typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2) {
-      try {
-        const clientId = this.authService.getGoogleClientId();
-        const client = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'email profile openid',
-          callback: (tokenResponse: any) => {
-            if (tokenResponse && tokenResponse.access_token) {
-              this.isLoading.set(true);
-              fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
-              })
-                .then((res) => res.json())
-                .then((profile) => {
-                  this.handleGoogleUserRegister(null, profile.email, profile.name);
-                })
-                .catch((err) => {
-                  console.error('Failed to fetch Google userinfo profile:', err);
-                  this.isLoading.set(false);
-                });
-            }
-          },
-          error_callback: (err: any) => {
-            console.warn('Google OAuth popup error:', err);
-            this.isLoading.set(false);
-          }
+  async signInWithGoogle(): Promise<void> {
+    // 1. Try Native Android / iOS Google Auth Plugin (Triggers Native Google Account Picker!)
+    try {
+      if (typeof window !== 'undefined' && (window as any).Capacitor) {
+        GoogleAuth.initialize({
+          clientId: this.authService.getGoogleClientId(),
+          scopes: ['profile', 'email', 'openid'],
+          grantOfflineAccess: true
         });
-        client.requestAccessToken();
-        return;
-      } catch (e) {
-        console.warn('Google OAuth init error, falling back:', e);
+        const googleUser = await GoogleAuth.signIn();
+        if (googleUser && googleUser.email) {
+          const email = googleUser.email;
+          const name = googleUser.name || googleUser.givenName || email.split('@')[0];
+          const idToken = googleUser.authentication?.idToken;
+          this.handleGoogleUserRegister(idToken || null, email, name);
+          return;
+        }
       }
+    } catch (err: any) {
+      console.warn('Native Capacitor Google Auth error / skipped:', err);
     }
 
-    const promptEmail = prompt('Enter your Google Account email for Instant Google OAuth Registration:', this.email() || 'user@gmail.com');
-    if (!promptEmail) return;
-    const name = promptEmail.split('@')[0];
-    this.handleGoogleUserRegister(null, promptEmail, name);
+    // 2. Web Fallback (Google Identity Services popup / In-App Modal)
+    this.ensureGoogleScriptLoaded(() => {
+      if (typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2) {
+        try {
+          const clientId = this.authService.getGoogleClientId();
+          const client = (window as any).google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: 'email profile openid',
+            callback: (tokenResponse: any) => {
+              if (tokenResponse && tokenResponse.access_token) {
+                this.isLoading.set(true);
+                fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+                })
+                  .then((res) => res.json())
+                  .then((profile) => {
+                    this.handleGoogleUserRegister(null, profile.email, profile.name);
+                  })
+                  .catch((err) => {
+                    console.error('Failed to fetch Google userinfo profile:', err);
+                    this.isLoading.set(false);
+                    this.openGoogleModal();
+                  });
+              }
+            },
+            error_callback: (err: any) => {
+              console.warn('Google OAuth popup error:', err);
+              this.isLoading.set(false);
+              this.openGoogleModal();
+            }
+          });
+          client.requestAccessToken();
+          return;
+        } catch (e) {
+          console.warn('Google OAuth init error, using in-app modal:', e);
+        }
+      }
+      this.openGoogleModal();
+    });
+  }
+
+  openGoogleModal(): void {
+    this.googleEmailInput.set(this.email() || '');
+    this.showGoogleModal.set(true);
+  }
+
+  closeGoogleModal(): void {
+    this.showGoogleModal.set(false);
+  }
+
+  submitGoogleModal(): void {
+    const email = this.googleEmailInput().trim();
+    if (!email) return;
+    this.showGoogleModal.set(false);
+    const name = email.split('@')[0];
+    this.handleGoogleUserRegister(null, email, name);
   }
 
   onGoogleCredentialReceived(credential: string): void {

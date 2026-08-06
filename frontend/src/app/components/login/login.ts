@@ -33,11 +33,14 @@ export class LoginComponent implements OnInit {
       this.email.set(savedUser.email);
       this.isPasswordEnabled.set(true);
     }
-    
+
     this.initGoogleOAuth();
   }
 
+  isGoogleInitialized = false;
+
   initGoogleOAuth(): void {
+    if (this.isGoogleInitialized) return;
     if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
       try {
         const clientId = this.authService.getGoogleClientId();
@@ -45,6 +48,7 @@ export class LoginComponent implements OnInit {
           client_id: clientId,
           callback: (response: any) => this.onGoogleCredentialReceived(response.credential)
         });
+        this.isGoogleInitialized = true;
       } catch (e) {
         console.warn('Google GSI initialization warning:', e);
       }
@@ -52,32 +56,40 @@ export class LoginComponent implements OnInit {
   }
 
   signInWithGoogle(): void {
-    if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
+    if (typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2) {
       try {
         const clientId = this.authService.getGoogleClientId();
-        (window as any).google.accounts.id.initialize({
+        const client = (window as any).google.accounts.oauth2.initTokenClient({
           client_id: clientId,
-          callback: (response: any) => this.onGoogleCredentialReceived(response.credential)
-        });
-        (window as any).google.accounts.id.prompt((notification: any) => {
-          if (notification.isNotDisplayed && notification.isNotDisplayed()) {
-            const reason = notification.getNotDisplayedReason ? notification.getNotDisplayedReason() : '';
-            console.warn('[GSI Prompt Not Displayed]:', reason);
-            this.errorMessage.set('Google Sign-In Origin Error: Please add http://localhost:4200 (and your active URL) under "Authorized JavaScript origins" in Google Cloud Console.');
-            setTimeout(() => {
-              const promptEmail = prompt('Google origin not registered yet. Enter your Google email to log in directly:', this.email() || 'user@gmail.com');
-              if (promptEmail) {
-                this.handleGoogleUserLogin(null, promptEmail, promptEmail.split('@')[0]);
-              }
-            }, 300);
+          scope: 'email profile openid',
+          callback: (tokenResponse: any) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              this.isLoading.set(true);
+              fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+              })
+                .then((res) => res.json())
+                .then((profile) => {
+                  this.handleGoogleUserLogin(null, profile.email, profile.name);
+                })
+                .catch((err) => {
+                  console.error('Failed to fetch Google userinfo profile:', err);
+                  this.isLoading.set(false);
+                });
+            }
+          },
+          error_callback: (err: any) => {
+            console.warn('Google OAuth popup error:', err);
+            this.isLoading.set(false);
           }
         });
+        client.requestAccessToken();
         return;
       } catch (e) {
-        console.warn('Google OAuth prompt error, falling back:', e);
+        console.warn('Google OAuth init error, falling back:', e);
       }
     }
-    
+
     const promptEmail = prompt('Enter your Google Account email for Instant Google OAuth Login:', this.email() || 'user@gmail.com');
     if (!promptEmail) return;
     const name = promptEmail.split('@')[0];
@@ -105,18 +117,21 @@ export class LoginComponent implements OnInit {
           userdetails: res.userdetails
         };
         this.authService.setSession(res.userid, res.token || 'google_auth_token', userObj);
+        if (res.userdetails) {
+          this.authService.saveUserHealthDetails(res.userid, res.userdetails);
+        }
         this.isLoading.set(false);
 
         if (res.has_health_details) {
           this.router.navigate(['/dashboard']);
         } else {
-          this.router.navigate(['/register'], { 
-            queryParams: { 
-              google: 'true', 
-              userid: res.userid, 
-              name: userObj.name, 
-              email: userObj.email 
-            } 
+          this.router.navigate(['/register'], {
+            queryParams: {
+              google: 'true',
+              userid: res.userid,
+              name: userObj.name,
+              email: userObj.email
+            }
           });
         }
       },

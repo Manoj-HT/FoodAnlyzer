@@ -56,114 +56,199 @@
               </header>
 
               <div class="column-sections">
-                <!-- Morning Section -->
-                <section class="day-section morning-section">
-                  <div class="section-title">🌅 Morning <span class="time-range">(5 AM - 12 PM)</span></div>
-                  <div class="section-meals">
-                    @for (meal of column.sections.morning; track meal.id) {
-                      <button 
-                        [class.meal-clickable-item]="true"
-                        [class.inferred-meal]="meal.isInferred"
-                        (click)="openDetailModal(meal, column.dateString, 'morning')"
-                      >
-                        <span class="meal-name">{{ meal.description }}</span>
-                        <span class="meal-time">{{ formatTime(meal.time) }}</span>
-                        @if (meal.isInferred) {
-                          <span class="inferred-tag">Inferred</span>
-                        }
-                      </button>
-                    } @empty {
-                      <span class="no-meals">No meals logged</span>
-                    }
+                <!-- Morning Section Accordion -->
+                @let morningOpen = isAccordionOpen(column.dateString, 'morning', column.sections.morning.length > 0);
+                <section class="day-section morning-section accordion-section" [class.open]="morningOpen">
+                  <div class="section-title accordion-header" (click)="toggleAccordion(column.dateString, 'morning', column.sections.morning.length > 0)" role="button" tabindex="0">
+                    <div class="accordion-title-left">
+                      <span class="category-emoji">🌅</span>
+                      <span class="category-text">Morning</span>
+                      <span class="time-range">(5 AM - 12 PM)</span>
+                    </div>
+                    <div class="accordion-title-right">
+                      @if (column.sections.morning.length > 0) {
+                        <span class="count-badge">{{ column.sections.morning.length }}</span>
+                      }
+                      <svg class="chevron-icon" [class.open]="morningOpen" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m6 9 6 6 6-6"/>
+                      </svg>
+                    </div>
                   </div>
+                  @if (morningOpen) {
+                    <div class="section-meals accordion-body animate-fade-in">
+                      @for (meal of column.sections.morning; track meal.id) {
+                        <button 
+                          [class.meal-clickable-item]="true"
+                          [class.inferred-meal]="meal.isInferred"
+                          (click)="openDetailModal(meal, column.dateString, 'morning')"
+                        >
+                          <span class="meal-name">{{ meal.description }}</span>
+                          <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                          @if (meal.isInferred) {
+                            <span class="inferred-tag">Inferred</span>
+                          }
+                        </button>
+                      } @empty {
+                        <span class="no-meals">No meals logged</span>
+                      }
+                    </div>
+                  }
                 </section>
 
-                <!-- Noon Section -->
-                <section class="day-section noon-section">
-                  <div class="section-title">☀️ Noon <span class="time-range">(12 PM - 5 PM)</span></div>
-                  <div class="section-meals">
-                    @for (meal of column.sections.noon; track meal.id) {
-                      <button 
-                        [class.meal-clickable-item]="true"
-                        [class.inferred-meal]="meal.isInferred"
-                        (click)="openDetailModal(meal, column.dateString, 'noon')"
-                      >
-                        <span class="meal-name">{{ meal.description }}</span>
-                        <span class="meal-time">{{ formatTime(meal.time) }}</span>
-                        @if (meal.isInferred) {
-                          <span class="inferred-tag">Inferred</span>
-                        }
-                      </button>
-                    } @empty {
-                      <span class="no-meals">No meals logged</span>
-                    }
+                <!-- Noon Section Accordion -->
+                @let noonOpen = isAccordionOpen(column.dateString, 'noon', column.sections.noon.length > 0);
+                <section class="day-section noon-section accordion-section" [class.open]="noonOpen">
+                  <div class="section-title accordion-header" (click)="toggleAccordion(column.dateString, 'noon', column.sections.noon.length > 0)" role="button" tabindex="0">
+                    <div class="accordion-title-left">
+                      <span class="category-emoji">☀️</span>
+                      <span class="category-text">Noon</span>
+                      <span class="time-range">(12 PM - 5 PM)</span>
+                    </div>
+                    <div class="accordion-title-right">
+                      @if (column.sections.noon.length > 0) {
+                        <span class="count-badge">{{ column.sections.noon.length }}</span>
+                      }
+                      <svg class="chevron-icon" [class.open]="noonOpen" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m6 9 6 6 6-6"/>
+                      </svg>
+                    </div>
                   </div>
+                  @if (noonOpen) {
+                    <div class="section-meals accordion-body animate-fade-in">
+                      @for (meal of column.sections.noon; track meal.id) {
+                        <button 
+                          [class.meal-clickable-item]="true"
+                          [class.inferred-meal]="meal.isInferred"
+                          (click)="openDetailModal(meal, column.dateString, 'noon')"
+                        >
+                          <span class="meal-name">{{ meal.description }}</span>
+                          <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                          @if (meal.isInferred) {
+                            <span class="inferred-tag">Inferred</span>
+                          }
+                        </button>
+                      } @empty {
+                        <span class="no-meals">No meals logged</span>
+                      }
+                    </div>
+                  }
                 </section>
 
-                <!-- Evening Section -->
-                <section class="day-section evening-section">
-                  <div class="section-title">🌇 Evening <span class="time-range">(5 PM - 9 PM)</span></div>
-                  <div class="section-meals">
-                    @for (meal of column.sections.evening; track meal.id) {
-                      <button 
-                        [class.meal-clickable-item]="true"
-                        [class.inferred-meal]="meal.isInferred"
-                        (click)="openDetailModal(meal, column.dateString, 'evening')"
-                      >
-                        <span class="meal-name">{{ meal.description }}</span>
-                        <span class="meal-time">{{ formatTime(meal.time) }}</span>
-                        @if (meal.isInferred) {
-                          <span class="inferred-tag">Inferred</span>
-                        }
-                      </button>
-                    } @empty {
-                      <span class="no-meals">No meals logged</span>
-                    }
+                <!-- Evening Section Accordion -->
+                @let eveningOpen = isAccordionOpen(column.dateString, 'evening', column.sections.evening.length > 0);
+                <section class="day-section evening-section accordion-section" [class.open]="eveningOpen">
+                  <div class="section-title accordion-header" (click)="toggleAccordion(column.dateString, 'evening', column.sections.evening.length > 0)" role="button" tabindex="0">
+                    <div class="accordion-title-left">
+                      <span class="category-emoji">🌇</span>
+                      <span class="category-text">Evening</span>
+                      <span class="time-range">(5 PM - 9 PM)</span>
+                    </div>
+                    <div class="accordion-title-right">
+                      @if (column.sections.evening.length > 0) {
+                        <span class="count-badge">{{ column.sections.evening.length }}</span>
+                      }
+                      <svg class="chevron-icon" [class.open]="eveningOpen" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m6 9 6 6 6-6"/>
+                      </svg>
+                    </div>
                   </div>
+                  @if (eveningOpen) {
+                    <div class="section-meals accordion-body animate-fade-in">
+                      @for (meal of column.sections.evening; track meal.id) {
+                        <button 
+                          [class.meal-clickable-item]="true"
+                          [class.inferred-meal]="meal.isInferred"
+                          (click)="openDetailModal(meal, column.dateString, 'evening')"
+                        >
+                          <span class="meal-name">{{ meal.description }}</span>
+                          <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                          @if (meal.isInferred) {
+                            <span class="inferred-tag">Inferred</span>
+                          }
+                        </button>
+                      } @empty {
+                        <span class="no-meals">No meals logged</span>
+                      }
+                    </div>
+                  }
                 </section>
 
-                <!-- Late Night Section -->
-                <section class="day-section late-night-section">
-                  <div class="section-title">🌙 Late Night <span class="time-range">(9 PM - 5 AM)</span></div>
-                  <div class="section-meals">
-                    @for (meal of column.sections.lateNight; track meal.id) {
-                      <button 
-                        [class.meal-clickable-item]="true"
-                        [class.inferred-meal]="meal.isInferred"
-                        (click)="openDetailModal(meal, column.dateString, 'lateNight')"
-                      >
-                        <span class="meal-name">{{ meal.description }}</span>
-                        <span class="meal-time">{{ formatTime(meal.time) }}</span>
-                        @if (meal.isInferred) {
-                          <span class="inferred-tag">Inferred</span>
-                        }
-                      </button>
-                    } @empty {
-                      <span class="no-meals">No meals logged</span>
-                    }
+                <!-- Late Night Section Accordion -->
+                @let lateNightOpen = isAccordionOpen(column.dateString, 'lateNight', column.sections.lateNight.length > 0);
+                <section class="day-section late-night-section accordion-section" [class.open]="lateNightOpen">
+                  <div class="section-title accordion-header" (click)="toggleAccordion(column.dateString, 'lateNight', column.sections.lateNight.length > 0)" role="button" tabindex="0">
+                    <div class="accordion-title-left">
+                      <span class="category-emoji">🌙</span>
+                      <span class="category-text">Late Night</span>
+                      <span class="time-range">(9 PM - 5 AM)</span>
+                    </div>
+                    <div class="accordion-title-right">
+                      @if (column.sections.lateNight.length > 0) {
+                        <span class="count-badge">{{ column.sections.lateNight.length }}</span>
+                      }
+                      <svg class="chevron-icon" [class.open]="lateNightOpen" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m6 9 6 6 6-6"/>
+                      </svg>
+                    </div>
                   </div>
+                  @if (lateNightOpen) {
+                    <div class="section-meals accordion-body animate-fade-in">
+                      @for (meal of column.sections.lateNight; track meal.id) {
+                        <button 
+                          [class.meal-clickable-item]="true"
+                          [class.inferred-meal]="meal.isInferred"
+                          (click)="openDetailModal(meal, column.dateString, 'lateNight')"
+                        >
+                          <span class="meal-name">{{ meal.description }}</span>
+                          <span class="meal-time">{{ formatTime(meal.time) }}</span>
+                          @if (meal.isInferred) {
+                            <span class="inferred-tag">Inferred</span>
+                          }
+                        </button>
+                      } @empty {
+                        <span class="no-meals">No meals logged</span>
+                      }
+                    </div>
+                  }
                 </section>
 
-                <!-- Physical Activity Section -->
-                <section class="day-section activity-section">
-                  <div class="section-title">🏃 Physical Activity</div>
-                  <div class="section-meals">
-                    @for (act of column.activities; track act.id) {
-                      <div class="activity-log-item">
-                        <span class="act-desc">{{ act.description }}</span>
-                        <span class="act-meta">🔥 {{ act.report?.calories_burned || 0 }} kcal • {{ act.report?.duration_minutes || 0 }} mins</span>
-                        @if (act.report?.tasks && act.report.tasks.length > 0) {
-                          <div class="mini-tasks">
-                            @for (t of act.report.tasks; track t.task) {
-                              <span class="mini-task-chip">{{ t.task }}: {{ t.calories_burned }} kcal</span>
-                            }
-                          </div>
-                        }
-                      </div>
-                    } @empty {
-                      <span class="no-meals">No activities logged</span>
-                    }
+                <!-- Physical Activity Section Accordion -->
+                @let activityOpen = isAccordionOpen(column.dateString, 'activity', column.activities.length > 0);
+                <section class="day-section activity-section accordion-section" [class.open]="activityOpen">
+                  <div class="section-title accordion-header" (click)="toggleAccordion(column.dateString, 'activity', column.activities.length > 0)" role="button" tabindex="0">
+                    <div class="accordion-title-left">
+                      <span class="category-emoji">🏃</span>
+                      <span class="category-text">Physical Activity</span>
+                      <span class="time-range">(All Day)</span>
+                    </div>
+                    <div class="accordion-title-right">
+                      @if (column.activities.length > 0) {
+                        <span class="count-badge">{{ column.activities.length }}</span>
+                      }
+                      <svg class="chevron-icon" [class.open]="activityOpen" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m6 9 6 6 6-6"/>
+                      </svg>
+                    </div>
                   </div>
+                  @if (activityOpen) {
+                    <div class="section-meals accordion-body animate-fade-in">
+                      @for (act of column.activities; track act.id) {
+                        <div class="activity-log-item">
+                          <span class="act-desc">{{ act.description }}</span>
+                          <span class="act-meta">🔥 {{ act.report?.calories_burned || 0 }} kcal • {{ act.report?.duration_minutes || 0 }} mins</span>
+                          @if (act.report?.tasks && act.report.tasks.length > 0) {
+                            <div class="mini-tasks">
+                              @for (t of act.report.tasks; track t.task) {
+                                <span class="mini-task-chip">{{ t.task }}: {{ t.calories_burned }} kcal</span>
+                              }
+                            </div>
+                          }
+                        </div>
+                      } @empty {
+                        <span class="no-meals">No activities logged</span>
+                      }
+                    </div>
+                  }
                 </section>
               </div>
             </div>

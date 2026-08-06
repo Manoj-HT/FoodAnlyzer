@@ -7,6 +7,8 @@ import time
 import re
 import urllib.request
 import urllib.parse
+import sqlite3
+import hashlib
 from typing import Dict, List, Optional, Any
 from fastapi import FastAPI, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -97,13 +99,46 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-Memory DB Models
+# Password Encryption & Security Helpers
+def hash_password(password: str) -> str:
+    if not password:
+        return ""
+    if password.startswith("pbkdf2_sha256$"):
+        return password
+    salt = os.urandom(16)
+    hashed = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+    return f"pbkdf2_sha256${salt.hex()}${hashed.hex()}"
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    if not stored_hash or not password:
+        return False
+    if stored_hash.startswith("pbkdf2_sha256$"):
+        parts = stored_hash.split("$")
+        if len(parts) != 3:
+            return False
+        try:
+            salt = bytes.fromhex(parts[1])
+            expected_hash = parts[2]
+            computed_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000).hex()
+            return computed_hash == expected_hash
+        except Exception as e:
+            print(f"[AUTH ERROR] Failed verifying password hash: {e}")
+            return False
+    else:
+        # Fallback migration check for legacy plaintext passwords
+        return password == stored_hash
+
+
+# Persistent User DB Model
 class UserInDB:
-    def __init__(self, name: str, email: str, password: str):
+    def __init__(self, name: str, email: str, password: str = ""):
         self.id = str(uuid.uuid4())
         self.name = name
         self.email = email
         self.password = password
+        self.password_hash = hash_password(password) if password else ""
+        self.google_id = ""
+        self.picture = ""
         self.confirmed = False
         self.token = f"tok_{uuid.uuid4().hex[:16]}"
         self.report_cache = {}
@@ -113,74 +148,333 @@ class UserInDB:
         self.structured_details = {}
 
 
-
-# Global in-memory user database
-# Keys: email (for lookup), values: UserInDB
+# Global User Cache (Synced with Supabase & SQLite DB)
 USERS_BY_EMAIL: Dict[str, UserInDB] = {}
-# Keys: user_id (for lookup), values: UserInDB
 USERS_BY_ID: Dict[str, UserInDB] = {}
 
-DB_FILE = os.path.join(os.path.dirname(__file__), "users.json")
+DATA_DIR = os.getenv("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
+os.makedirs(DATA_DIR, exist_ok=True)
+SQLITE_DB_PATH = os.path.join(DATA_DIR, "users.db")
+DB_FILE = os.path.join(DATA_DIR, "users.json")
+
+# Supabase Cloud Database Client
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
+supabase_client = None
+
+def get_supabase_client():
+    global supabase_client
+    if supabase_client is not None:
+        return supabase_client
+    url = SUPABASE_URL.rstrip('/')
+    if url.endswith('/rest/v1'):
+        url = url[:-8].rstrip('/')
+    if url and SUPABASE_KEY:
+        try:
+            from supabase import create_client
+            supabase_client = create_client(url, SUPABASE_KEY)
+            print("[SUPABASE ENGINE] Initialized Supabase Cloud DB client successfully.")
+            return supabase_client
+        except Exception as e:
+            print(f"[SUPABASE ENGINE] Failed to initialize client: {e}")
+            return None
+    return None
+
+def save_user_to_supabase(user: UserInDB) -> bool:
+    client = get_supabase_client()
+    if not client:
+        return False
+    try:
+        data = {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email.lower(),
+            "password_hash": user.password_hash or "",
+            "google_id": getattr(user, 'google_id', ''),
+            "picture": getattr(user, 'picture', ''),
+            "confirmed": user.confirmed,
+            "token": user.token,
+            "report_cache": user.report_cache or {},
+            "insights": user.insights or [],
+            "last_insight_generated_time": user.last_insight_generated_time or "",
+            "insight_version": user.insight_version or 0,
+            "structured_details": user.structured_details or {}
+        }
+        client.table("users").upsert(data).execute()
+        print(f"[SUPABASE ENGINE] Successfully saved user {user.email} to Supabase Cloud DB.")
+        return True
+    except Exception as e:
+        print(f"[SUPABASE ENGINE] Error saving user {user.email} to Supabase: {e}")
+        return False
+
+def load_users_from_supabase() -> bool:
+    global USERS_BY_EMAIL, USERS_BY_ID
+    client = get_supabase_client()
+    if not client:
+        return False
+    try:
+        res = client.table("users").select("*").execute()
+        rows = res.data
+        if rows:
+            for row in rows:
+                u = UserInDB(name=row["name"], email=row["email"], password="")
+                u.id = row["id"]
+                u.password_hash = row.get("password_hash") or ""
+                u.password = u.password_hash
+                u.google_id = row.get("google_id") or ""
+                u.picture = row.get("picture") or ""
+                u.confirmed = bool(row.get("confirmed", False))
+                u.token = row.get("token") or u.token
+                u.report_cache = row.get("report_cache") if isinstance(row.get("report_cache"), dict) else {}
+                u.insights = row.get("insights") if isinstance(row.get("insights"), list) else []
+                u.last_insight_generated_time = row.get("last_insight_generated_time") or ""
+                u.insight_version = row.get("insight_version") or 0
+                u.structured_details = row.get("structured_details") if isinstance(row.get("structured_details"), dict) else {}
+
+                USERS_BY_EMAIL[u.email.lower()] = u
+                USERS_BY_ID[u.id] = u
+            print(f"[SUPABASE ENGINE] Successfully loaded {len(rows)} users from Supabase Cloud DB.")
+            return True
+        return False
+    except Exception as e:
+        print(f"[SUPABASE ENGINE] Error loading users from Supabase: {e}")
+        return False
+
+def init_sqlite_db():
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT,
+            google_id TEXT,
+            picture TEXT,
+            confirmed INTEGER DEFAULT 0,
+            token TEXT,
+            report_cache TEXT,
+            insights TEXT,
+            last_insight_generated_time TEXT,
+            insight_version INTEGER DEFAULT 0,
+            structured_details TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def save_user_to_db(user: UserInDB):
+    if user.password and not user.password_hash:
+        user.password_hash = hash_password(user.password)
+
+    # Sync to Supabase Cloud DB if configured
+    save_user_to_supabase(user)
+
+    # Save to local SQLite database as well
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO users (
+            id, name, email, password_hash, google_id, picture, confirmed, token,
+            report_cache, insights, last_insight_generated_time, insight_version, structured_details
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            name=excluded.name,
+            email=excluded.email,
+            password_hash=excluded.password_hash,
+            google_id=excluded.google_id,
+            picture=excluded.picture,
+            confirmed=excluded.confirmed,
+            token=excluded.token,
+            report_cache=excluded.report_cache,
+            insights=excluded.insights,
+            last_insight_generated_time=excluded.last_insight_generated_time,
+            insight_version=excluded.insight_version,
+            structured_details=excluded.structured_details
+    """, (
+        user.id,
+        user.name,
+        user.email.lower(),
+        user.password_hash or "",
+        getattr(user, 'google_id', ''),
+        getattr(user, 'picture', ''),
+        1 if user.confirmed else 0,
+        user.token,
+        json.dumps(user.report_cache),
+        json.dumps(user.insights),
+        user.last_insight_generated_time or "",
+        user.insight_version or 0,
+        json.dumps(user.structured_details)
+    ))
+    conn.commit()
+    conn.close()
 
 def save_to_json():
-    pass
+    try:
+        data = {}
+        for user in USERS_BY_ID.values():
+            save_user_to_db(user)
+            data[user.id] = {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "password": user.password_hash or user.password,
+                "google_id": getattr(user, 'google_id', ''),
+                "picture": getattr(user, 'picture', ''),
+                "confirmed": user.confirmed,
+                "token": user.token,
+                "report_cache": user.report_cache,
+                "insights": user.insights,
+                "last_insight_generated_time": user.last_insight_generated_time,
+                "insight_version": user.insight_version,
+                "structured_details": user.structured_details
+            }
+        with open(DB_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"Error saving to database / JSON file: {e}")
 
-def load_from_json():
+def load_users_from_db():
     global USERS_BY_EMAIL, USERS_BY_ID
-    if not os.path.exists(DB_FILE):
-        mock_user = UserInDB(
-            name="Jane Doe",
-            email="jane@example.com",
-            password="password123"
-        )
-        mock_user.structured_details = run_fallback_user_analysis(
-            "I am a 30-year-old nurse. I love running, high protein meals, and want to lose weight.", []
-        )["structured_details"]
-        USERS_BY_EMAIL[mock_user.email] = mock_user
-        USERS_BY_ID[mock_user.id] = mock_user
-        save_to_json()
+    
+    # 1. Try loading from Supabase Cloud DB first
+    if load_users_from_supabase():
+        # Sync loaded Supabase users into local SQLite DB for fallback caching
+        for u in USERS_BY_ID.values():
+            init_sqlite_db()
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO users (
+                    id, name, email, password_hash, google_id, picture, confirmed, token,
+                    report_cache, insights, last_insight_generated_time, insight_version, structured_details
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name=excluded.name, email=excluded.email, password_hash=excluded.password_hash,
+                    google_id=excluded.google_id, picture=excluded.picture, confirmed=excluded.confirmed,
+                    token=excluded.token, report_cache=excluded.report_cache, insights=excluded.insights,
+                    last_insight_generated_time=excluded.last_insight_generated_time,
+                    insight_version=excluded.insight_version, structured_details=excluded.structured_details
+            """, (
+                u.id, u.name, u.email.lower(), u.password_hash or "", getattr(u, 'google_id', ''),
+                getattr(u, 'picture', ''), 1 if u.confirmed else 0, u.token,
+                json.dumps(u.report_cache), json.dumps(u.insights),
+                u.last_insight_generated_time or "", u.insight_version or 0,
+                json.dumps(u.structured_details)
+            ))
+            conn.commit()
+            conn.close()
         return
 
-    try:
-        with open(DB_FILE, "r") as f:
-            data = json.load(f)
-        needs_resave = False
-        for uid, udata in data.items():
-            user = UserInDB(
-                name=udata["name"],
-                email=udata["email"],
-                password=udata["password"]
-            )
-            user.id = udata["id"]
-            user.confirmed = udata.get("confirmed", False)
-            user.token = udata.get("token", user.token)
-            user.report_cache = udata.get("report_cache", {})
-            user.insights = udata.get("insights", [])
-            user.last_insight_generated_time = udata.get("last_insight_generated_time", "")
-            user.insight_version = udata.get("insight_version", 0)
-            
-            if "structured_details" in udata and udata["structured_details"]:
-                user.structured_details = udata["structured_details"]
-            else:
-                legacy_bio = udata.get("bio", "")
-                legacy_mods = udata.get("modifications", [])
-                if legacy_bio or legacy_mods:
-                    fallback_res = run_fallback_user_analysis(legacy_bio, legacy_mods)
-                    user.structured_details = fallback_res["structured_details"]
-                    needs_resave = True
+    # 2. Fallback to local SQLite database if Supabase is not configured or offline
+    init_sqlite_db()
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users")
+    rows = cursor.fetchall()
+    conn.close()
+
+    if rows:
+        for row in rows:
+            u = UserInDB(name=row["name"], email=row["email"], password="")
+            u.id = row["id"]
+            u.password_hash = row["password_hash"] or ""
+            u.password = u.password_hash
+            u.google_id = row["google_id"] or ""
+            u.picture = row["picture"] or ""
+            u.confirmed = bool(row["confirmed"])
+            u.token = row["token"] or u.token
+            try:
+                u.report_cache = json.loads(row["report_cache"]) if row["report_cache"] else {}
+            except Exception:
+                u.report_cache = {}
+            try:
+                u.insights = json.loads(row["insights"]) if row["insights"] else []
+            except Exception:
+                u.insights = []
+            u.last_insight_generated_time = row["last_insight_generated_time"] or ""
+            u.insight_version = row["insight_version"] or 0
+            try:
+                u.structured_details = json.loads(row["structured_details"]) if row["structured_details"] else {}
+            except Exception:
+                u.structured_details = {}
+
+            USERS_BY_EMAIL[u.email.lower()] = u
+            USERS_BY_ID[u.id] = u
+        print(f"[DB ENGINE] Successfully loaded {len(rows)} users from SQLite database.")
+        return
+
+    # Fallback import from users.json if SQLite is empty
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "r") as f:
+                data = json.load(f)
+            for uid, udata in data.items():
+                pwd = udata.get("password", "")
+                user = UserInDB(
+                    name=udata["name"],
+                    email=udata["email"],
+                    password=pwd
+                )
+                user.id = udata["id"]
+                user.confirmed = udata.get("confirmed", False)
+                user.token = udata.get("token", user.token)
+                user.report_cache = udata.get("report_cache", {})
+                user.insights = udata.get("insights", [])
+                user.last_insight_generated_time = udata.get("last_insight_generated_time", "")
+                user.insight_version = udata.get("insight_version", 0)
+                user.google_id = udata.get("google_id", "")
+                user.picture = udata.get("picture", "")
+                
+                if "structured_details" in udata and udata["structured_details"]:
+                    user.structured_details = udata["structured_details"]
                 else:
-                    user.structured_details = {}
-            
-            USERS_BY_EMAIL[user.email] = user
-            USERS_BY_ID[user.id] = user
-        if needs_resave:
-            save_to_json()
-    except Exception as e:
-        print(f"Error loading database: {e}")
+                    legacy_bio = udata.get("bio", "")
+                    legacy_mods = udata.get("modifications", [])
+                    if legacy_bio or legacy_mods:
+                        fallback_res = run_fallback_user_analysis(legacy_bio, legacy_mods)
+                        user.structured_details = fallback_res["structured_details"]
+                    else:
+                        user.structured_details = {}
+                
+                if pwd and not pwd.startswith("pbkdf2_sha256$"):
+                    user.password_hash = hash_password(pwd)
+                else:
+                    user.password_hash = pwd
+
+                USERS_BY_EMAIL[user.email.lower()] = user
+                USERS_BY_ID[user.id] = user
+                save_user_to_db(user)
+            print(f"[DB ENGINE] Successfully imported {len(USERS_BY_ID)} users from users.json into SQLite database.")
+            return
+        except Exception as e:
+            print(f"Error importing users.json to database: {e}")
+
+    # Seed mock user if no records exist
+    mock_user = UserInDB(
+        name="Jane Doe",
+        email="jane@example.com",
+        password="password123"
+    )
+    mock_user.structured_details = run_fallback_user_analysis(
+        "I am a 30-year-old nurse. I love running, high protein meals, and want to lose weight.", []
+    )["structured_details"]
+    USERS_BY_EMAIL[mock_user.email.lower()] = mock_user
+    USERS_BY_ID[mock_user.id] = mock_user
+    save_user_to_db(mock_user)
+    save_to_json()
+
+
+def load_from_json():
+    load_users_from_db()
+
 
 # Pydantic Schemas for Requests & Responses
 class CheckEmailRequest(BaseModel):
     email: EmailStr
+    credential: Optional[str] = None
+    google_id: Optional[str] = None
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -562,16 +856,48 @@ def extract_user_details(user: UserInDB) -> str:
 
 @app.post("/api/users/check")
 def check_email(payload: CheckEmailRequest):
-    email = payload.email.strip().lower()
-    user = USERS_BY_EMAIL.get(email)
+    google_email = None
+    google_name = None
+    google_sub = payload.google_id
+    
+    # 1. First check if Google OAuth JWT credential was passed
+    if payload.credential:
+        try:
+            import base64
+            parts = payload.credential.split('.')
+            if len(parts) >= 2:
+                padded = parts[1] + '=' * (-len(parts[1]) % 4)
+                decoded_bytes = base64.b64decode(padded)
+                data = json.loads(decoded_bytes.decode('utf-8'))
+                google_email = data.get("email")
+                google_name = data.get("name")
+                if not google_sub:
+                    google_sub = data.get("sub")
+        except Exception as e:
+            print(f"[CHECK API] JWT parse warning: {e}")
+
+    # Determine email to look up
+    target_email = (google_email or payload.email or "").strip().lower()
+
+    # 2. Look up in persistent database / memory cache
+    user = USERS_BY_EMAIL.get(target_email) if target_email else None
+    if not user and google_sub:
+        for u in USERS_BY_ID.values():
+            if getattr(u, 'google_id', '') == google_sub:
+                user = u
+                break
+
     if user:
         return {
             "exists": True,
             "user": {
                 "id": user.id,
-                "email": user.email
-            }
+                "email": user.email,
+                "name": user.name
+            },
+            "is_google": bool(getattr(user, 'google_id', '') or not user.password_hash or "google" in user.token)
         }
+
     return {"exists": False}
 
 
@@ -595,6 +921,7 @@ def get_user_details(userid: str):
 def google_login(payload: GoogleLoginRequest):
     email = None
     name = None
+    google_sub = payload.google_id
     
     if payload.credential:
         try:
@@ -606,6 +933,8 @@ def google_login(payload: GoogleLoginRequest):
                 data = json.loads(decoded_bytes.decode('utf-8'))
                 email = data.get("email")
                 name = data.get("name")
+                if not google_sub:
+                    google_sub = data.get("sub")
         except Exception as e:
             print(f"[GOOGLE OAUTH] JWT parse error: {e}")
             
@@ -624,15 +953,30 @@ def google_login(payload: GoogleLoginRequest):
     clean_name = (name or clean_email.split('@')[0]).strip()
     
     user = USERS_BY_EMAIL.get(clean_email)
+    if not user and google_sub:
+        for u in USERS_BY_ID.values():
+            if getattr(u, 'google_id', '') == google_sub:
+                user = u
+                break
+
     if not user:
         user = UserInDB(
             name=clean_name,
             email=clean_email,
             password=""
         )
+        user.google_id = google_sub or ""
+        user.picture = payload.picture or ""
         user.confirmed = True
+        user.password_hash = hash_password(f"google_oauth_{user.id}")
         USERS_BY_EMAIL[clean_email] = user
         USERS_BY_ID[user.id] = user
+        save_to_json()
+    else:
+        if google_sub and not getattr(user, 'google_id', ''):
+            user.google_id = google_sub
+        if payload.picture and not getattr(user, 'picture', ''):
+            user.picture = payload.picture
         save_to_json()
         
     has_details = bool(user.structured_details and user.structured_details.get("current_details"))
@@ -653,11 +997,27 @@ def google_login(payload: GoogleLoginRequest):
 def login(payload: LoginRequest):
     email = payload.email.strip().lower()
     user = USERS_BY_EMAIL.get(email)
-    if not user or user.password != payload.password:
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect password or email."
         )
+        
+    pwd_valid = False
+    if hasattr(user, 'password_hash') and user.password_hash:
+        pwd_valid = verify_password(payload.password, user.password_hash)
+    elif hasattr(user, 'password') and user.password:
+        pwd_valid = verify_password(payload.password, user.password)
+        if pwd_valid:
+            user.password_hash = hash_password(payload.password)
+            save_to_json()
+
+    if not pwd_valid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password or email."
+        )
+
     return {
         "userid": user.id,
         "token": user.token
@@ -678,12 +1038,13 @@ def register(payload: RegisterRequest):
         email=email,
         password=payload.password
     )
+    user.password_hash = hash_password(payload.password)
     
     # Analyze user details using LLM or Fallback
     analysis = analyze_user_bio_and_modifications(payload.bio.strip(), [])
     user.structured_details = analysis["structured_details"]
     
-    # Store in memory databases
+    # Store in memory databases & SQLite persistent DB
     USERS_BY_EMAIL[email] = user
     USERS_BY_ID[user.id] = user
     save_to_json()

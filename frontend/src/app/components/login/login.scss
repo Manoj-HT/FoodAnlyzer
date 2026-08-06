@@ -73,8 +73,19 @@
 .google-auth-section {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 16px;
   margin-bottom: 12px;
+}
+
+.google-btn-wrapper {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+
+  iframe {
+    margin: 0 auto;
+  }
 }
 
 .btn-google {

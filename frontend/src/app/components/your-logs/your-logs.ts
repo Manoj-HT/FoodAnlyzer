@@ -90,6 +90,25 @@ export class YourLogsComponent implements OnInit {
   // How many weeks we are offset from the current week (0 = current week, 1 = 1 week ago, etc.)
   weekOffset = signal<number>(0);
 
+  // Track accordion open/closed state per date and category section key
+  accordionState = signal<Record<string, boolean>>({});
+
+  toggleAccordion(dateString: string, categoryKey: string, defaultOpen: boolean): void {
+    const key = `${dateString}_${categoryKey}`;
+    const currentMap = this.accordionState();
+    const currentState = currentMap[key] !== undefined ? currentMap[key] : defaultOpen;
+    this.accordionState.set({
+      ...currentMap,
+      [key]: !currentState,
+    });
+  }
+
+  isAccordionOpen(dateString: string, categoryKey: string, defaultOpen: boolean): boolean {
+    const key = `${dateString}_${categoryKey}`;
+    const currentMap = this.accordionState();
+    return currentMap[key] !== undefined ? currentMap[key] : defaultOpen;
+  }
+
   // Dynamic computed columns for the 7 days (left is latest/today, and 6 preceding days)
   dayColumns = computed<DayColumn[]>(() => {
     const columns: DayColumn[] = [];

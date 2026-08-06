@@ -60,9 +60,40 @@ export class AuthService {
     return this.http.post<CheckEmailResponse>(`${this.apiUrl}/users/check`, { email });
   }
 
+  saveUserHealthDetails(userid: string, userdetails: string): void {
+    if (!userid || !userdetails) return;
+    try {
+      localStorage.setItem(`health_details_${userid}`, userdetails);
+      const current = this.currentUser() || this.getLocalUser();
+      if (current && (current.id === userid || !current.id)) {
+        const updated = { ...current, id: userid, userdetails };
+        this.saveLocalUser(updated);
+      }
+    } catch (e) {
+      console.error('Failed to save health details to device:', e);
+    }
+  }
+
+  getUserHealthDetails(userid: string): string | null {
+    if (!userid) return null;
+    try {
+      const localDetails = localStorage.getItem(`health_details_${userid}`);
+      if (localDetails) return localDetails;
+    } catch (e) {
+      console.error('Failed to read device health details:', e);
+    }
+    const current = this.currentUser() || this.getLocalUser();
+    if (current && current.userdetails) {
+      return current.userdetails;
+    }
+    return null;
+  }
+
   getUserDetails(userid: string, forceRefresh = false): Observable<User> {
+    const deviceDetails = this.getUserHealthDetails(userid);
     const cached = this.currentUser();
-    if (!forceRefresh && cached && cached.id === userid) {
+    
+    if (!forceRefresh && cached && cached.id === userid && cached.userdetails) {
       return of(cached);
     }
 
@@ -73,12 +104,27 @@ export class AuthService {
     this.userDetailsObservable = this.http.get<User>(`${this.apiUrl}/users/${userid}`).pipe(
       tap({
         next: (user) => {
+          if (deviceDetails && !user.userdetails) {
+            user.userdetails = deviceDetails;
+          } else if (user.userdetails) {
+            this.saveUserHealthDetails(userid, user.userdetails);
+          }
           this.currentUser.set(user);
           this.saveLocalUser(user);
           this.userDetailsObservable = null;
         },
         error: () => {
           this.userDetailsObservable = null;
+          const fallbackUser: User = cached || {
+            id: userid,
+            email: 'user@local.app',
+            name: 'Member',
+            userdetails: deviceDetails || ''
+          };
+          if (deviceDetails) fallbackUser.userdetails = deviceDetails;
+          this.currentUser.set(fallbackUser);
+          this.saveLocalUser(fallbackUser);
+          return of(fallbackUser);
         },
       })
     );

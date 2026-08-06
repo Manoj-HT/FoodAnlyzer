@@ -93,7 +93,8 @@ export class CurrentRecommendationComponent implements OnInit, OnDestroy {
         this.dbService.getMonthlyAggregates(userid)
       ]);
 
-      const userDetails = profile?.structured_details ? JSON.stringify(profile.structured_details) : this.rawBio();
+      const deviceHealthDetails = this.authService.getUserHealthDetails(userid);
+      const userDetails = profile?.structured_details ? JSON.stringify(profile.structured_details) : (deviceHealthDetails || this.rawBio());
       this.generateRecommendations(userDetails, []);
 
       const payload = {

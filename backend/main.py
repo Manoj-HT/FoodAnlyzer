@@ -200,42 +200,81 @@ def get_supabase_client():
             return None
     return None
 
+import urllib.request
+
+def _supabase_rest_request(endpoint: str, method: str = 'GET', payload: any = None):
+    url = os.environ.get("SUPABASE_URL", "https://ppgwmvwqnxlbjujljfdc.supabase.co").strip().strip("'\"").rstrip('/')
+    if not url.endswith('/rest/v1'):
+        url = f"{url}/rest/v1"
+    full_url = f"{url}/{endpoint.lstrip('/')}"
+    key = os.environ.get("SUPABASE_KEY", "").strip().strip("'\"")
+    if not key:
+        return None
+    headers = {
+        'apikey': key,
+        'Authorization': f'Bearer {key}',
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+    }
+    data = json.dumps(payload).encode('utf-8') if payload is not None else None
+    req = urllib.request.Request(full_url, data=data, headers=headers, method=method)
+    with urllib.request.urlopen(req) as resp:
+        body = resp.read().decode('utf-8')
+        return json.loads(body) if body else []
+
 def save_user_to_supabase(user: UserInDB) -> bool:
+    data = {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email.lower(),
+        "password_hash": user.password_hash or "",
+        "google_id": getattr(user, 'google_id', ''),
+        "picture": getattr(user, 'picture', ''),
+        "confirmed": user.confirmed,
+        "token": user.token,
+        "report_cache": user.report_cache or {},
+        "insights": user.insights or [],
+        "last_insight_generated_time": user.last_insight_generated_time or "",
+        "insight_version": user.insight_version or 0,
+        "structured_details": user.structured_details or {}
+    }
     client = get_supabase_client()
-    if not client:
-        return False
+    if client:
+        try:
+            client.table("users").upsert(data).execute()
+            print(f"[SUPABASE ENGINE] Successfully saved user {user.email} to Supabase Cloud DB via SDK.")
+            return True
+        except Exception as e:
+            print(f"[SUPABASE ENGINE] SDK save error ({e}), attempting REST HTTP fallback...")
+
     try:
-        data = {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email.lower(),
-            "password_hash": user.password_hash or "",
-            "google_id": getattr(user, 'google_id', ''),
-            "picture": getattr(user, 'picture', ''),
-            "confirmed": user.confirmed,
-            "token": user.token,
-            "report_cache": user.report_cache or {},
-            "insights": user.insights or [],
-            "last_insight_generated_time": user.last_insight_generated_time or "",
-            "insight_version": user.insight_version or 0,
-            "structured_details": user.structured_details or {}
-        }
-        client.table("users").upsert(data).execute()
-        print(f"[SUPABASE ENGINE] Successfully saved user {user.email} to Supabase Cloud DB.")
+        _supabase_rest_request("users", method="POST", payload=[data])
+        print(f"[SUPABASE ENGINE] Successfully saved user {user.email} to Supabase Cloud DB via REST API.")
         return True
     except Exception as e:
-        print(f"[SUPABASE ENGINE] Error saving user {user.email} to Supabase: {e}")
+        print(f"[SUPABASE ENGINE] Error saving user {user.email} to Supabase REST: {e}")
         return False
 
 def load_users_from_supabase() -> bool:
     global USERS_BY_EMAIL, USERS_BY_ID
+    rows = None
     client = get_supabase_client()
-    if not client:
-        return False
-    try:
-        res = client.table("users").select("*").execute()
-        rows = res.data
-        if rows:
+    if client:
+        try:
+            res = client.table("users").select("*").execute()
+            rows = res.data
+        except Exception as e:
+            print(f"[SUPABASE ENGINE] SDK load error ({e}), attempting REST HTTP fallback...")
+
+    if rows is None:
+        try:
+            rows = _supabase_rest_request("users?select=*")
+        except Exception as e:
+            print(f"[SUPABASE ENGINE] REST HTTP load error: {e}")
+            return False
+
+    if rows:
+        try:
             for row in rows:
                 u = UserInDB(name=row["name"], email=row["email"], password="")
                 u.id = row["id"]
@@ -255,10 +294,10 @@ def load_users_from_supabase() -> bool:
                 USERS_BY_ID[u.id] = u
             print(f"[SUPABASE ENGINE] Successfully loaded {len(rows)} users from Supabase Cloud DB.")
             return True
-        return False
-    except Exception as e:
-        print(f"[SUPABASE ENGINE] Error loading users from Supabase: {e}")
-        return False
+        except Exception as e:
+            print(f"[SUPABASE ENGINE] Error parsing loaded users from Supabase: {e}")
+            return False
+    return False
 
 def init_sqlite_db():
     conn = sqlite3.connect(SQLITE_DB_PATH)

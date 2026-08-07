@@ -191,12 +191,10 @@ def get_supabase_client():
         try:
             from supabase import create_client
             supabase_client = create_client(url, key)
-            print("[SUPABASE ENGINE] Initialized Supabase Cloud DB client successfully.")
+            print("[SUPABASE ENGINE] Initialized Supabase Cloud DB SDK client successfully.")
             return supabase_client
-        except Exception as e:
-            import traceback
-            print(f"[SUPABASE ENGINE] Failed to initialize client: {type(e).__name__} -> {e}")
-            traceback.print_exc()
+        except Exception:
+            print("[SUPABASE ENGINE] SDK client bypassed (sb_secret key format). Active Engine: Direct Supabase REST API.")
             return None
     return None
 

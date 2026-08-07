@@ -158,7 +158,20 @@ SQLITE_DB_PATH = os.path.join(DATA_DIR, "users.db")
 DB_FILE = os.path.join(DATA_DIR, "users.json")
 
 # Supabase Cloud Database Client
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
+def _load_env_file():
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    if not os.environ.get(k.strip()):
+                        os.environ[k.strip()] = v.strip().strip("'\"")
+
+_load_env_file()
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://ppgwmvwqnxlbjujljfdc.supabase.co").strip()
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 supabase_client = None
 
@@ -169,10 +182,11 @@ def get_supabase_client():
     url = SUPABASE_URL.rstrip('/')
     if url.endswith('/rest/v1'):
         url = url[:-8].rstrip('/')
-    if url and SUPABASE_KEY:
+    key = SUPABASE_KEY
+    if url and key:
         try:
             from supabase import create_client
-            supabase_client = create_client(url, SUPABASE_KEY)
+            supabase_client = create_client(url, key)
             print("[SUPABASE ENGINE] Initialized Supabase Cloud DB client successfully.")
             return supabase_client
         except Exception as e:

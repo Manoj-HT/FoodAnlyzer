@@ -29,6 +29,22 @@ export class LoginComponent implements OnInit {
       return;
     }
 
+    // Check if there is a pending google auth user saved across Activity resume
+    const pendingGoogleStr = localStorage.getItem('pending_google_login');
+    if (pendingGoogleStr) {
+      try {
+        const pending = JSON.parse(pendingGoogleStr);
+        if (pending && pending.email) {
+          localStorage.removeItem('pending_google_login');
+          console.log('[DEBUG] Found pending_google_login on resume:', pending.email);
+          this.handleGoogleUserLogin(pending.idToken || null, pending.email, pending.name);
+          return;
+        }
+      } catch (e) {
+        localStorage.removeItem('pending_google_login');
+      }
+    }
+
     const savedUser = this.authService.getLocalUser();
     if (savedUser && savedUser.email) {
       this.email.set(savedUser.email);
@@ -86,60 +102,100 @@ export class LoginComponent implements OnInit {
   }
 
   async signInWithGoogle(): Promise<void> {
+    console.log('[DEBUG] signInWithGoogle triggered');
     // 1. Try Native Android / iOS Google Auth Plugin (Triggers Native Google Account Picker!)
     try {
       if (typeof window !== 'undefined' && (window as any).Capacitor) {
-        GoogleAuth.initialize({
-          clientId: this.authService.getGoogleClientId(),
-          scopes: ['profile', 'email', 'openid'],
-          grantOfflineAccess: true
-        });
-        const googleUser = await GoogleAuth.signIn();
-        if (googleUser && googleUser.email) {
-          const email = googleUser.email;
-          const name = googleUser.name || googleUser.givenName || email.split('@')[0];
-          const idToken = googleUser.authentication?.idToken;
-          this.handleGoogleUserLogin(idToken || null, email, name);
-          return;
+        try {
+          GoogleAuth.initialize({
+            clientId: this.authService.getGoogleClientId(),
+            scopes: ['profile', 'email', 'openid'],
+            grantOfflineAccess: true
+          });
+        } catch (initErr) {
+          console.warn('[DEBUG] GoogleAuth initialize warning:', initErr);
+        }
+
+        console.log('[DEBUG] Invoking native GoogleAuth.signIn()...');
+        let googleUser: any = null;
+        try {
+          googleUser = await GoogleAuth.signIn();
+          console.log('[DEBUG] Native GoogleAuth.signIn() SUCCESS:', JSON.stringify(googleUser));
+        } catch (signInErr: any) {
+          console.error('[DEBUG] Native GoogleAuth.signIn() EXCEPTION:', JSON.stringify(signInErr), signInErr);
+        }
+
+        if (googleUser) {
+          const idToken = googleUser.idToken || googleUser.authentication?.idToken || googleUser.serverAuthCode;
+          let email = googleUser.email;
+          let name = googleUser.name || googleUser.givenName || googleUser.familyName;
+
+          console.log('[DEBUG] Extracted initial properties:', { email, name, hasIdToken: !!idToken });
+
+          if (!email && idToken) {
+            const payload = this.authService.parseJwt(idToken);
+            console.log('[DEBUG] Parsed JWT payload:', payload);
+            if (payload) {
+              email = payload.email || email;
+              name = payload.name || name;
+            }
+          }
+
+          if (email) {
+            name = name || email.split('@')[0];
+            console.log('[DEBUG] Final extracted account:', email, name);
+            localStorage.setItem('pending_google_login', JSON.stringify({ idToken: idToken || null, email, name }));
+            this.handleGoogleUserLogin(idToken || null, email, name);
+            return;
+          } else {
+            console.warn('[DEBUG] googleUser returned but could not extract email:', googleUser);
+          }
         }
       }
     } catch (err: any) {
-      console.warn('Native Capacitor Google Auth error / skipped:', err);
+      console.warn('[DEBUG] Native Capacitor Google Auth outer error:', err);
     }
+
+    console.log('[DEBUG] Falling back to Web/Modal Flow...');
 
     // 2. Web Fallback (Google Identity Services popup / In-App Modal)
     this.ensureGoogleScriptLoaded(() => {
-      if (typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2) {
+      if (typeof window !== 'undefined' && (window as any).google?.accounts) {
         try {
           const clientId = this.authService.getGoogleClientId();
-          const client = (window as any).google.accounts.oauth2.initTokenClient({
-            client_id: clientId,
-            scope: 'email profile openid',
-            callback: (tokenResponse: any) => {
-              if (tokenResponse && tokenResponse.access_token) {
-                this.isLoading.set(true);
-                fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
-                })
-                  .then((res) => res.json())
-                  .then((profile) => {
-                    this.handleGoogleUserLogin(null, profile.email, profile.name);
+          if ((window as any).google.accounts.oauth2) {
+            const client = (window as any).google.accounts.oauth2.initTokenClient({
+              client_id: clientId,
+              scope: 'email profile openid',
+              callback: (tokenResponse: any) => {
+                if (tokenResponse && tokenResponse.access_token) {
+                  this.isLoading.set(true);
+                  fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
                   })
-                  .catch((err) => {
-                    console.error('Failed to fetch Google userinfo profile:', err);
-                    this.isLoading.set(false);
-                    this.openGoogleModal();
-                  });
+                    .then((res) => res.json())
+                    .then((profile) => {
+                      this.handleGoogleUserLogin(null, profile.email, profile.name);
+                    })
+                    .catch((err) => {
+                      console.error('Failed to fetch Google userinfo profile:', err);
+                      this.isLoading.set(false);
+                      this.openGoogleModal();
+                    });
+                }
+              },
+              error_callback: (err: any) => {
+                console.warn('Google OAuth popup error:', err);
+                this.isLoading.set(false);
+                this.openGoogleModal();
               }
-            },
-            error_callback: (err: any) => {
-              console.warn('Google OAuth popup error:', err);
-              this.isLoading.set(false);
-              this.openGoogleModal();
-            }
-          });
-          client.requestAccessToken();
-          return;
+            });
+            client.requestAccessToken();
+            return;
+          } else if ((window as any).google.accounts.id) {
+            (window as any).google.accounts.id.prompt();
+            return;
+          }
         } catch (e) {
           console.warn('Google OAuth init error, using in-app modal:', e);
         }

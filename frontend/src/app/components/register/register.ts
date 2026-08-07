@@ -41,6 +41,22 @@ export class RegisterComponent implements OnInit {
       return;
     }
 
+    // Check if there is a pending google auth user saved across Activity resume
+    const pendingGoogleStr = localStorage.getItem('pending_google_login');
+    if (pendingGoogleStr) {
+      try {
+        const pending = JSON.parse(pendingGoogleStr);
+        if (pending && pending.email) {
+          localStorage.removeItem('pending_google_login');
+          console.log('[DEBUG] Found pending_google_login on register resume:', pending.email);
+          this.handleGoogleUserRegister(pending.idToken || null, pending.email, pending.name);
+          return;
+        }
+      } catch (e) {
+        localStorage.removeItem('pending_google_login');
+      }
+    }
+
     this.route.queryParams.subscribe((params) => {
       if (params['email']) {
         this.email.set(params['email']);
@@ -108,18 +124,40 @@ export class RegisterComponent implements OnInit {
     // 1. Try Native Android / iOS Google Auth Plugin (Triggers Native Google Account Picker!)
     try {
       if (typeof window !== 'undefined' && (window as any).Capacitor) {
-        GoogleAuth.initialize({
-          clientId: this.authService.getGoogleClientId(),
-          scopes: ['profile', 'email', 'openid'],
-          grantOfflineAccess: true
-        });
-        const googleUser = await GoogleAuth.signIn();
-        if (googleUser && googleUser.email) {
-          const email = googleUser.email;
-          const name = googleUser.name || googleUser.givenName || email.split('@')[0];
-          const idToken = googleUser.authentication?.idToken;
-          this.handleGoogleUserRegister(idToken || null, email, name);
-          return;
+        try {
+          GoogleAuth.initialize({
+            clientId: this.authService.getGoogleClientId(),
+            scopes: ['profile', 'email', 'openid'],
+            grantOfflineAccess: true
+          });
+        } catch (initErr) {
+          console.warn('GoogleAuth initialize warning:', initErr);
+        }
+
+        console.log('Invoking native GoogleAuth.signIn()...');
+        const googleUser: any = await GoogleAuth.signIn();
+        console.log('Native GoogleAuth.signIn() result:', googleUser);
+
+        if (googleUser) {
+          const idToken = googleUser.idToken || googleUser.authentication?.idToken || googleUser.serverAuthCode;
+          let email = googleUser.email;
+          let name = googleUser.name || googleUser.givenName || googleUser.familyName;
+
+          if (!email && idToken) {
+            const payload = this.authService.parseJwt(idToken);
+            if (payload) {
+              email = payload.email || email;
+              name = payload.name || name;
+            }
+          }
+
+          if (email) {
+            name = name || email.split('@')[0];
+            console.log('Successfully extracted Google account:', email, name);
+            localStorage.setItem('pending_google_login', JSON.stringify({ idToken: idToken || null, email, name }));
+            this.handleGoogleUserRegister(idToken || null, email, name);
+            return;
+          }
         }
       }
     } catch (err: any) {

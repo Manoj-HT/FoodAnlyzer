@@ -84,3 +84,4 @@ apikey.md
 *.key
 
 train/
+backend/*.env

@@ -171,18 +171,22 @@ def _load_env_file():
 
 _load_env_file()
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://ppgwmvwqnxlbjujljfdc.supabase.co").strip()
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://ppgwmvwqnxlbjujljfdc.supabase.co").strip().strip("'\"")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip().strip("'\"")
 supabase_client = None
 
 def get_supabase_client():
     global supabase_client
     if supabase_client is not None:
         return supabase_client
-    url = SUPABASE_URL.rstrip('/')
+    url = os.environ.get("SUPABASE_URL", "https://ppgwmvwqnxlbjujljfdc.supabase.co").strip().strip("'\"").rstrip('/')
     if url.endswith('/rest/v1'):
         url = url[:-8].rstrip('/')
-    key = SUPABASE_KEY
+    key = os.environ.get("SUPABASE_KEY", "").strip().strip("'\"")
+    print(f"[SUPABASE ENGINE] Initializing... URL='{url}', Key Length={len(key)}, Prefix='{key[:8] if key else 'EMPTY'}...', Suffix='...{key[-4:] if len(key)>4 else ''}'")
+    if not key:
+        print("[SUPABASE ENGINE] Warning: SUPABASE_KEY environment variable is empty. Please set SUPABASE_KEY in Render Environment Variables.")
+        return None
     if url and key:
         try:
             from supabase import create_client
@@ -190,7 +194,9 @@ def get_supabase_client():
             print("[SUPABASE ENGINE] Initialized Supabase Cloud DB client successfully.")
             return supabase_client
         except Exception as e:
-            print(f"[SUPABASE ENGINE] Failed to initialize client: {e}")
+            import traceback
+            print(f"[SUPABASE ENGINE] Failed to initialize client: {type(e).__name__} -> {e}")
+            traceback.print_exc()
             return None
     return None
 

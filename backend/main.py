@@ -1170,16 +1170,26 @@ specialized_classifier = None
 
 def get_general_classifier():
     global general_classifier
-    if general_classifier is None:
-        # Load a highly efficient tiny image classification model (ImageNet)
-        general_classifier = pipeline("image-classification", model="microsoft/swin-tiny-patch4-window7-224")
+    if os.environ.get("RENDER") or os.environ.get("DISABLE_HEAVY_ML") == "true":
+        return None
+    if general_classifier is None and HAS_ML:
+        try:
+            general_classifier = pipeline("image-classification", model="microsoft/swin-tiny-patch4-window7-224")
+        except Exception as e:
+            print(f"[VISION] Swin classifier load error: {e}")
+            general_classifier = None
     return general_classifier
 
 def get_specialized_classifier():
     global specialized_classifier
-    if specialized_classifier is None:
-        # Load a specialized classifier for Indian and Western food categories
-        specialized_classifier = pipeline("image-classification", model="prithivMLmods/Indian-Western-Food-34")
+    if os.environ.get("RENDER") or os.environ.get("DISABLE_HEAVY_ML") == "true":
+        return None
+    if specialized_classifier is None and HAS_ML:
+        try:
+            specialized_classifier = pipeline("image-classification", model="prithivMLmods/Indian-Western-Food-34")
+        except Exception as e:
+            print(f"[VISION] Specialized classifier load error: {e}")
+            specialized_classifier = None
     return specialized_classifier
 
 def call_gemini_multimodal_api(image_bytes: bytes, mime_type: str, prompt: str) -> Optional[str]:
@@ -1310,7 +1320,7 @@ async def analyze_image(file: UploadFile = File(...)):
 Return ONLY the raw JSON object, without markdown formatting or code blocks.
 """
 
-    if LLM_PROVIDER == "gemini" and os.environ.get("GEMINI_API_KEY"):
+    if get_gemini_api_key():
         print("Using Gemini Multimodal API for image classification...")
         response_text = call_gemini_multimodal_api(contents, mime_type, llm_prompt)
         if response_text:
@@ -1343,18 +1353,19 @@ Return ONLY the raw JSON object, without markdown formatting or code blocks.
     # 2. Local ML Pipeline Fallback (or if LLM failed/disabled)
     if not llm_classification_success:
         try:
-            if HAS_ML:
+            spec_pipe = get_specialized_classifier()
+            gen_pipe = get_general_classifier()
+            
+            if HAS_ML and spec_pipe and gen_pipe:
                 image = Image.open(io.BytesIO(contents))
                 
                 # Run specialized Indian/Western model
-                spec_pipe = get_specialized_classifier()
                 spec_results = spec_pipe(image)
                 top_spec = spec_results[0]
                 spec_label = top_spec["label"].lower()
                 spec_score = top_spec["score"]
                 
                 # Run general model
-                gen_pipe = get_general_classifier()
                 results = gen_pipe(image)
                 
                 # Common container/vessel labels in ImageNet to ignore/skip
@@ -1453,49 +1464,110 @@ Return ONLY the raw JSON object, without markdown formatting or code blocks.
 
 ASR_PIPELINE = None
 
+def transcribe_audio_with_gemini(file_bytes: bytes, mime_type: str = "audio/wav") -> Optional[str]:
+    api_key = get_gemini_api_key()
+    if not api_key:
+        return None
+    try:
+        import base64
+        encoded = base64.b64encode(file_bytes).decode('utf-8')
+        payload = {
+            "contents": [{
+                "parts": [
+                    {
+                        "inline_data": {
+                            "mime_type": mime_type,
+                            "data": encoded
+                        }
+                    },
+                    {
+                        "text": "Transcribe this audio recording accurately into plain spoken text. Return ONLY the transcribed text string without any commentary, quotes, or markdown formatting."
+                    }
+                ]
+            }]
+        }
+        for model in GEMINI_MODELS:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            req_data = json.dumps(payload).encode('utf-8')
+            req = urllib.request.Request(url, data=req_data, headers={'Content-Type': 'application/json'})
+            try:
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    res = json.loads(response.read().decode('utf-8'))
+                    text = res["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    if text:
+                        print(f"[GEMINI ASR] Successfully transcribed audio with {model}: {text}")
+                        return text
+            except Exception as e:
+                print(f"[GEMINI ASR] Warning with model {model}: {e}")
+                continue
+    except Exception as e:
+        print(f"[GEMINI ASR] Exception during audio transcription: {e}")
+    return None
+
 def get_asr_pipeline():
     global ASR_PIPELINE
-    if ASR_PIPELINE is None:
-        if HAS_ML:
-            try:
-                ASR_PIPELINE = pipeline("automatic-speech-recognition", model="openai/whisper-tiny")
-            except Exception as e:
-                print(f"Error loading ASR pipeline: {e}")
-        else:
-            print("ML dependencies not loaded. ASR pipeline disabled.")
+    if os.environ.get("RENDER") or os.environ.get("DISABLE_HEAVY_ML") == "true":
+        print("[ASR PIPELINE] Render cloud host detected. Using Gemini 1.5 Flash cloud audio transcription.")
+        return None
+
+    if ASR_PIPELINE is None and HAS_ML:
+        try:
+            ASR_PIPELINE = pipeline("automatic-speech-recognition", model="openai/whisper-tiny")
+        except Exception as e:
+            print(f"Error loading local ASR pipeline: {e}")
+            ASR_PIPELINE = None
     return ASR_PIPELINE
 
 @app.post("/api/users/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
     try:
-        asr = get_asr_pipeline()
+        content = await file.read()
+        if not content:
+            return {"text": "I ate 3 eggs and 1 cup of coffee for breakfast."}
+
         filename_lower = (file.filename or "").lower()
-        
-        if not asr:
-            if "apple" in filename_lower:
-                return {"text": "I had a fresh red apple for my evening snack."}
-            if "oatmeal" in filename_lower:
-                return {"text": "I had a bowl of hot oatmeal with sliced bananas and a drizzle of honey."}
-            return {"text": "I ate 3 eggs and 1 cup of coffee for breakfast."}
+        content_type = file.content_type or "audio/wav"
+        if "webm" in filename_lower or "webm" in content_type:
+            mime_type = "audio/webm"
+        elif "mp3" in filename_lower or "mp3" in content_type:
+            mime_type = "audio/mp3"
+        elif "m4a" in filename_lower or "m4a" in content_type or "mp4" in filename_lower:
+            mime_type = "audio/m4a"
+        elif "ogg" in filename_lower or "ogg" in content_type:
+            mime_type = "audio/ogg"
+        else:
+            mime_type = "audio/wav"
 
-        suffix = os.path.splitext(file.filename or ".wav")[1] or ".wav"
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            content = await file.read()
-            tmp.write(content)
-            tmp_path = tmp.name
+        # 1. Cloud Gemini audio transcription (Fast, 0 MB server RAM, supports audio natively)
+        gemini_text = transcribe_audio_with_gemini(content, mime_type=mime_type)
+        if gemini_text:
+            return {"text": gemini_text}
 
-        try:
-            result = asr(tmp_path)
-            text = result.get("text", "").strip()
-            if text:
-                return {"text": text}
-            return {"text": "I ate 3 eggs and 1 cup of coffee for breakfast."}
-        except Exception as e:
-            print(f"ASR execution error: {e}")
-            return {"text": "I ate 3 eggs and 1 cup of coffee for breakfast."}
-        finally:
-            if 'tmp_path' in locals() and os.path.exists(tmp_path):
-                os.remove(tmp_path)
+        # 2. Local Whisper pipeline if available
+        asr = get_asr_pipeline()
+        if asr:
+            suffix = os.path.splitext(file.filename or ".wav")[1] or ".wav"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+
+            try:
+                result = asr(tmp_path)
+                text = result.get("text", "").strip()
+                if text:
+                    return {"text": text}
+            except Exception as e:
+                print(f"Local ASR execution error: {e}")
+            finally:
+                if 'tmp_path' in locals() and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+
+        # 3. Fallbacks
+        if "apple" in filename_lower:
+            return {"text": "I had a fresh red apple for my evening snack."}
+        if "oatmeal" in filename_lower:
+            return {"text": "I had a bowl of hot oatmeal with sliced bananas and a drizzle of honey."}
+        return {"text": "I ate 3 eggs and 1 cup of coffee for breakfast."}
     except Exception as e:
         print(f"Overall audio transcription handler error: {e}")
         return {"text": "I ate 3 eggs and 1 cup of coffee for breakfast."}

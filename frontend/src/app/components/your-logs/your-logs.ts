@@ -55,10 +55,12 @@ interface DayColumn {
   activities: ActivityLogItem[];
 }
 
+import { SectionHeaderComponent } from '../section-header/section-header';
+
 @Component({
   selector: 'app-your-logs',
   standalone: true,
-  imports: [CommonModule, ModalComponent],
+  imports: [CommonModule, ModalComponent, SectionHeaderComponent],
   templateUrl: './your-logs.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './your-logs.scss',

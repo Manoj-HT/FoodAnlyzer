@@ -3,6 +3,10 @@
   font-family: 'Inter', sans-serif;
   padding: 0 0 60px 0;
   box-sizing: border-box;
+
+  @media (max-width: 600px) {
+    padding: var(--mobile-page-padding);
+  }
 }
 
 // Navigation Header
@@ -58,7 +62,7 @@
 .dashboard-grid {
   max-width: 900px;
   margin: 30px auto 0 auto;
-  padding: 0 20px 100px 20px;
+  padding: 0 0 100px 0;
   display: flex;
   flex-direction: column;
   gap: 30px;
@@ -75,6 +79,10 @@
   box-shadow: 0 10px 30px rgba(44, 76, 56, 0.04);
   padding: 30px;
   box-sizing: border-box;
+
+  @media screen and (max-width: 500px) {
+    padding: 20px;
+  }
 }
 
 // Left Widget

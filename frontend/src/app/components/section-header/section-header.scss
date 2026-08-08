@@ -1,0 +1,74 @@
+.page-section-header {
+  margin-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+
+  .header-text-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .title-with-emoji {
+    .header-emoji {
+      font-size: 1.5rem;
+      line-height: 1;
+      filter: drop-shadow(0 4px 8px rgba(44, 76, 56, 0.15));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease;
+
+      &:hover {
+        transform: scale(1.1) rotate(5deg);
+      }
+    }
+
+    .header-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.85rem;
+      font-weight: 800;
+      color: #1b3b2b;
+      margin: 0;
+      letter-spacing: -0.5px;
+      line-height: 1.25;
+      background: linear-gradient(135deg, #1b3b2b 0%, #2c4c38 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+  }
+
+  .header-subtitle {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    color: #4b5563;
+    margin: 0;
+    font-weight: 500;
+    line-height: 1.45;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-section-header {
+    margin-bottom: 18px;
+
+    .title-with-emoji {
+      gap: 8px;
+      text-align: center;
+
+      .header-emoji {
+        font-size: 1.8rem;
+        margin: 0.5rem 0;
+      }
+
+      .header-title {
+        font-size: 1.5rem;
+      }
+    }
+
+    .header-subtitle {
+      font-size: 0.88rem;
+      text-align: center;
+    }
+  }
+}

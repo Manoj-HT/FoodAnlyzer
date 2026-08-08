@@ -122,37 +122,7 @@
 /* Responsive Mobile View Styles (<= 768px) */
 @media (max-width: 768px) {
   .dashboard-header {
-    padding: 12px 16px;
-    
-    .desktop-only {
-      display: none !important;
-    }
-
-    .header-user {
-      gap: 8px;
-
-      .user-greeting {
-        font-size: 0.8rem;
-
-        strong {
-          display: inline-block;
-          max-width: 90px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          vertical-align: bottom;
-        }
-      }
-
-      .btn-text {
-        display: none;
-      }
-
-      .btn-icon-only {
-        padding: 6px 10px;
-        border-radius: 50%;
-      }
-    }
+    display: none !important;
   }
 
   /* Floating Pill Navbar hovering at bottom */

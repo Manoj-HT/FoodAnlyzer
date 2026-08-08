@@ -8,6 +8,10 @@
 .day-overview-content {
   flex: 1;
   padding: 32px 24px 64px 24px;
+
+  @media (max-width: 600px) {
+    padding: var(--mobile-page-padding);
+  }
 }
 
 .container {
@@ -103,8 +107,13 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* Summary Hero Cards */
@@ -187,8 +196,15 @@
       padding: 3px 8px;
       border-radius: 6px;
 
-      &.carb { background: #fef3c7; color: #92400e; }
-      &.fat { background: #fee2e2; color: #991b1b; }
+      &.carb {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      &.fat {
+        background: #fee2e2;
+        color: #991b1b;
+      }
     }
   }
 }
@@ -234,7 +250,8 @@
   }
 }
 
-.meals-list, .activities-list {
+.meals-list,
+.activities-list {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -275,10 +292,25 @@
       padding: 4px 12px;
       border-radius: 8px;
 
-      &[data-grade="A"] { background: #d1fae5; color: #065f46; }
-      &[data-grade="B"] { background: #dbeafe; color: #1e40af; }
-      &[data-grade="C"] { background: #fef3c7; color: #92400e; }
-      &[data-grade="D"] { background: #fee2e2; color: #991b1b; }
+      &[data-grade="A"] {
+        background: #d1fae5;
+        color: #065f46;
+      }
+
+      &[data-grade="B"] {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+
+      &[data-grade="C"] {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      &[data-grade="D"] {
+        background: #fee2e2;
+        color: #991b1b;
+      }
     }
   }
 
@@ -361,8 +393,13 @@
       display: flex;
       flex-direction: column;
 
-      &.burn { background: rgba(219, 234, 254, 0.7); }
-      &.dur { background: rgba(243, 232, 255, 0.7); }
+      &.burn {
+        background: rgba(219, 234, 254, 0.7);
+      }
+
+      &.dur {
+        background: rgba(243, 232, 255, 0.7);
+      }
 
       .val {
         font-family: 'Outfit', sans-serif;

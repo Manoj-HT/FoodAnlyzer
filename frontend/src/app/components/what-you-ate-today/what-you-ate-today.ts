@@ -17,6 +17,7 @@ import { MediaPreviewService, MediaPreviewItem } from '../../services/media-prev
 import { ModalComponent } from '../../utilities/components/modal/modal';
 import { AccordionStateService } from '../../services/accordion-state';
 import { LogsStateService } from '../../services/logs-state';
+import { SectionHeaderComponent } from '../section-header/section-header';
 
 export interface MealBreakdown {
   calories: number;
@@ -46,7 +47,7 @@ export interface ActivityBreakdown {
 @Component({
   selector: 'app-what-you-ate-today',
   standalone: true,
-  imports: [FormsModule, ModalComponent],
+  imports: [FormsModule, ModalComponent, SectionHeaderComponent],
   templateUrl: './what-you-ate-today.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './what-you-ate-today.scss',

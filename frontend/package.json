@@ -23,6 +23,8 @@
     "@angular/router": "^22.0.0",
     "@capacitor/android": "^8.5.0",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/share": "^8.0.1",
     "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4",
     "@mcp-b/webmcp-polyfill": "^3.0.0",
     "chart.js": "^4.5.1",

@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap');
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   width: 100%;
@@ -12,10 +13,20 @@ html, body {
   color: #2e3d30;
 }
 
+:root {
+  --mobile-page-padding: 40px 16px 100px 16px;
+}
+
 /* Completely hide scrollbars project-wide while maintaining smooth scrolling */
-html, body, *, *::before, *::after {
-  scrollbar-width: none !important; /* Firefox */
-  -ms-overflow-style: none !important; /* IE and Edge */
+html,
+body,
+*,
+*::before,
+*::after {
+  scrollbar-width: none !important;
+  /* Firefox */
+  -ms-overflow-style: none !important;
+  /* IE and Edge */
 }
 
 ::-webkit-scrollbar,
@@ -71,5 +82,11 @@ body::-webkit-scrollbar,
     box-shadow: none !important;
     cursor: not-allowed !important;
     transform: none !important;
+  }
+}
+
+@media (max-width: 600px) {
+  main {
+    padding: var(--mobile-page-padding);
   }
 }

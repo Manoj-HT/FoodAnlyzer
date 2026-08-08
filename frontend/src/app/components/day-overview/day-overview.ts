@@ -10,10 +10,12 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../services/auth';
 import { LogsStateService } from '../../services/logs-state';
 
+import { SectionHeaderComponent } from '../section-header/section-header';
+
 @Component({
   selector: 'app-day-overview',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, SectionHeaderComponent],
   templateUrl: './day-overview.html',
   styleUrl: './day-overview.scss',
   changeDetection: ChangeDetectionStrategy.Eager,

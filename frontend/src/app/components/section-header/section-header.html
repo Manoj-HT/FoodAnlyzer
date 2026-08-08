@@ -1,0 +1,13 @@
+<div class="page-section-header">
+  <div class="header-text-group">
+    <div class="title-with-emoji">
+      @if (emoji()) {
+      <span class="header-emoji">{{ emoji() }}</span>
+      }
+      <h2 class="header-title">{{ title() }}</h2>
+    </div>
+    @if (subtitle()) {
+    <p class="header-subtitle">{{ subtitle() }}</p>
+    }
+  </div>
+</div>

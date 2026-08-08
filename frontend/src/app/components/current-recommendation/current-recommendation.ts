@@ -13,10 +13,12 @@ interface RecommendationCard {
   tips: string[];
 }
 
+import { SectionHeaderComponent } from '../section-header/section-header';
+
 @Component({
   selector: 'app-current-recommendation',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SectionHeaderComponent],
   templateUrl: './current-recommendation.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './current-recommendation.scss',

@@ -1,15 +1,19 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy, ViewChild, ElementRef } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { AuthService } from '../../services/auth';
 import { IndexedDbService } from '../../services/indexed-db';
 import { LogsStateService } from '../../services/logs-state';
 import { ModalComponent } from '../../utilities/components/modal/modal';
+import { SectionHeaderComponent } from '../section-header/section-header';
 
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [FormsModule, ModalComponent],
+  imports: [FormsModule, ModalComponent, SectionHeaderComponent],
   templateUrl: './profile.html',
   styleUrl: './profile.scss',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -99,16 +103,63 @@ export class ProfileComponent implements OnInit {
   }
 
   async exportData(): Promise<void> {
-    const userid = this.authService.getUserId() || 'default_user';
-    const compressedBlob = await this.indexedDb.exportCompressedBackup(userid);
-    const url = URL.createObjectURL(compressedBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    const isGzip = 'CompressionStream' in window;
-    const ext = isGzip ? 'json.gz' : 'json';
-    a.download = `FoodAnlyzer_Backup_${new Date().toISOString().split('T')[0]}.${ext}`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const userid = this.authService.getUserId() || 'default_user';
+      const compressedBlob = await this.indexedDb.exportCompressedBackup(userid);
+      const isGzip = 'CompressionStream' in window;
+      const ext = isGzip ? 'json.gz' : 'json';
+      const fileName = `FoodAnlyzer_Backup_${new Date().toISOString().split('T')[0]}.${ext}`;
+
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const res = reader.result as string;
+          const base64 = res.includes(',') ? res.split(',')[1] : res;
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(compressedBlob);
+      });
+
+      if (Capacitor.isNativePlatform()) {
+        let savedFile;
+        try {
+          savedFile = await Filesystem.writeFile({
+            path: fileName,
+            data: base64Data,
+            directory: Directory.Documents,
+            recursive: true
+          });
+        } catch (docErr) {
+          console.warn('Could not write to Documents, falling back to Cache:', docErr);
+          savedFile = await Filesystem.writeFile({
+            path: fileName,
+            data: base64Data,
+            directory: Directory.Cache,
+            recursive: true
+          });
+        }
+
+        await Share.share({
+          title: 'Export FoodAnalyzer Backup',
+          text: 'Here is your FoodAnalyzer health data backup.',
+          url: savedFile.uri,
+          dialogTitle: 'Save or Share Health Backup'
+        });
+      } else {
+        const mimeType = isGzip ? 'application/gzip' : 'application/json';
+        const dataUrl = `data:${mimeType};base64,${base64Data}`;
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (err) {
+      console.error('Export data failed:', err);
+      alert('Failed to export data. Please try again.');
+    }
   }
 
   triggerImportFileSelect(): void {

@@ -1,10 +1,6 @@
 <div class="recommendations-page-container">
   <main class="recommendations-content">
-    <div class="recommendations-header-section">
-      <div class="header-emoji">💡</div>
-      <h2>Personalized Recommendations</h2>
-      <p class="subtitle">Tailored nutrition insights, monthly consolidations, and weekly aggregation history.</p>
-    </div>
+    <app-section-header [emoji]="'💡'" [title]="'Personalized Recommendations'" [subtitle]="'Tailored nutrition insights, monthly consolidations, and weekly aggregation history.'" />
 
     @if (isLoading()) {
     <div class="loader-container">

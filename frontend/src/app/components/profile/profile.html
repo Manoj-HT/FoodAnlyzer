@@ -1,9 +1,6 @@
 <div class="profile-page-container">
   <main class="profile-content">
-    <div class="profile-header-section">
-      <h2>Member Profile</h2>
-      <p class="subtitle">Manage your account details, health goals, and data backup</p>
-    </div>
+    <app-section-header [emoji]="'👋'" [title]="'Hey, ' + (userName() || 'Member')" [subtitle]="'Manage your account details, health goals, and data backup'" />
 
     <!-- Main Profile Card -->
     <div class="glass-card profile-main-card">

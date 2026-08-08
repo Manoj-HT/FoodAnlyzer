@@ -90,10 +90,21 @@ OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generat
 
 app = FastAPI(title="FoodAnalyzer API")
 
-# Enable CORS for Angular Frontend running on http://localhost:4200
+# Enable CORS for Angular Frontend, Mobile Apps, and Cloud Deployments
+origins = [
+    "http://localhost:4200",
+    "http://localhost:8080",
+    "http://localhost",
+    "http://127.0.0.1:4200",
+    "http://10.0.2.2:8080",
+    "capacitor://localhost",
+    "https://localhost",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -596,6 +596,7 @@ export class WhatYouAteTodayComponent implements OnInit {
     if (this.voiceMode() === 'recording') {
       this.cancelVoiceRecording();
     }
+    this.voiceMode.set('select');
     this.isVoiceOptionModalOpen.set(false);
   }
 
@@ -615,20 +616,17 @@ export class WhatYouAteTodayComponent implements OnInit {
     try {
       const previewItem = await this.mediaPreviewService.stopRecording();
       this.previewItems.update((items) => [...items, previewItem]);
-      this.closeVoiceOptionModal();
     } catch (err) {
       console.error('Stop recording failed:', err);
-      this.closeVoiceOptionModal();
+    } finally {
+      this.voiceMode.set('select');
+      this.isVoiceOptionModalOpen.set(false);
     }
   }
 
-  async cancelVoiceRecording(): Promise<void> {
-    try {
-      await this.mediaPreviewService.stopRecording();
-    } catch (err) {
-      console.error('Cancel recording failed:', err);
-    }
+  cancelVoiceRecording(): void {
     this.voiceMode.set('select');
+    this.mediaPreviewService.cancelRecording();
   }
 
   triggerVoiceUpload(inputEl: HTMLInputElement): void {

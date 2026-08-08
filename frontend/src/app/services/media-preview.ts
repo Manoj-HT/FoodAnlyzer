@@ -91,4 +91,23 @@ export class MediaPreviewService {
       this.mediaRecorder.stop();
     });
   }
+
+  cancelRecording(): void {
+    if (!this.isRecording() || !this.mediaRecorder) {
+      this.isRecording.set(false);
+      return;
+    }
+
+    try {
+      this.mediaRecorder.onstop = () => {
+        this.isRecording.set(false);
+        if (this.mediaRecorder?.stream) {
+          this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        }
+      };
+      this.mediaRecorder.stop();
+    } catch (err) {
+      this.isRecording.set(false);
+    }
+  }
 }

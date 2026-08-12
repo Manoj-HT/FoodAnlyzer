@@ -262,6 +262,34 @@
       box-shadow: 0 4px 14px rgba(239, 68, 68, 0.15);
     }
   }
+
+  .privacy-footer-row {
+    margin-top: 24px;
+    text-align: center;
+    padding-top: 16px;
+    border-top: 1px dashed rgba(44, 76, 56, 0.12);
+
+    .privacy-policy-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #2c4c38;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      background: rgba(44, 76, 56, 0.05);
+      padding: 6px 16px;
+      border-radius: 9999px;
+      border: 1px solid rgba(44, 76, 56, 0.1);
+      transition: all 0.2s ease;
+
+      &:hover {
+        background: rgba(44, 76, 56, 0.1);
+        border-color: rgba(44, 76, 56, 0.25);
+        transform: translateY(-1px);
+      }
+    }
+  }
 }
 
 // Modal inputs & spinners

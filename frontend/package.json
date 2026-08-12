@@ -10,7 +10,8 @@
     "cap:sync": "ng build && cap sync",
     "cap:copy": "ng build && cap copy",
     "cap:open": "cap open android",
-    "build:apk": "bash ./build-apk.sh"
+    "build:apk": "bash ./build-apk.sh",
+    "build:aab": "bash ./build-aab.sh"
   },
   "private": true,
   "packageManager": "npm@11.12.1",

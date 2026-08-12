@@ -3,7 +3,7 @@
 **Effective Date:** August 8, 2026  
 **Last Updated:** August 8, 2026  
 **Project Lead:** Manoj H T & Team (PES University Electronic City Campus)  
-**Contact Email:** `manojht@pes.edu` / `privacy@foodanalyzer.app`
+**Contact Email:** `manulogan101@gmail.com` / `privacy@foodanalyzer.app`
 
 ---
 
@@ -34,7 +34,7 @@ At **FoodAnalyzer**, we believe your health, dietary choices, voice recordings, 
 You retain **complete control** over your information at all times.
 
 * **On-Demand Deletion:** If you ever wish to remove your data, delete your account, or purge your cloud backups, you can request immediate account and data erasure.
-* **How to Request Removal:** Simply contact us at `manojht@pes.edu` or use the in-app account deletion request option in your Profile tab.
+* **How to Request Removal:** Simply contact us at `manulogan101@gmail.com` or use the in-app account deletion request option in your Profile tab.
 * **Immediate Purge:** Upon receiving your request, all cloud backup records, user profiles, and associated database entries will be **permanently deleted within 24 hours**.
 * **Local Purge:** You can also clear your local application data at any time directly through your browser or mobile app settings.
 
@@ -80,7 +80,7 @@ We are actively advancing our privacy technology to bring complete offline auton
 
 If you have any questions, concerns, or feedback regarding this Privacy Policy, or if you would like to submit a data erasure request, please reach out to us:
 
-* **Email:** `manojht@pes.edu`
+* **Email:** `manulogan101@gmail.com`
 * **Department:** Department of Computer Science & Engineering  
 * **Institution:** PES University Electronic City Campus, Bengaluru – 560100, Karnataka, India
 

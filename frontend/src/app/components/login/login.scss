@@ -339,6 +339,32 @@
 }
 
 /* Glassmorphism In-App Modal Overlay */
+.auth-footer {
+  text-align: center;
+
+  p {
+    color: #718375;
+    font-size: 0.85rem;
+    margin: 0 0 6px 0;
+  }
+
+  .privacy-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #2c4c38;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: opacity 0.2s ease, text-decoration 0.2s ease;
+
+    &:hover {
+      text-decoration: underline;
+      opacity: 0.85;
+    }
+  }
+}
+
 .modal-overlay {
   position: fixed;
   top: 0;

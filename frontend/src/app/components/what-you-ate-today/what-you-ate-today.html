@@ -149,6 +149,36 @@
               </span>
             </div>
 
+            @if (!mealBreakdown()?.is_multi && mealBreakdown()?.entries?.length === 1) {
+            <div class="detected-time-banner">
+              🕒 <span>Auto-selected time: <strong>{{ mealBreakdown()!.entries![0].time_label }}</strong></span>
+            </div>
+            }
+
+            @if (mealBreakdown()?.is_multi && mealBreakdown()?.entries && mealBreakdown()!.entries!.length > 1) {
+            <div class="multi-entries-section">
+              <div class="multi-entries-header">
+                <h4>🍽️ Detected Separate Meals ({{ mealBreakdown()!.entries!.length }})</h4>
+                <span class="multi-entries-sub">Each meal will be logged at its own time</span>
+              </div>
+              <div class="multi-entries-list">
+                @for (entry of mealBreakdown()!.entries!; track $index) {
+                <div class="multi-entry-card">
+                  <div class="multi-entry-main">
+                    <span class="multi-entry-title">{{ entry.description }}</span>
+                    <span class="multi-entry-time">🕒 {{ entry.time_label }}</span>
+                  </div>
+                  <div class="multi-entry-stats">
+                    <span class="multi-entry-cal">{{ entry.calories }} kcal</span>
+                    <span class="multi-entry-macros">P {{ entry.protein }}g • C {{ entry.carbs }}g • F {{ entry.fat }}g</span>
+                    <span class="health-grade mini-grade grade-{{ entry.grade.toLowerCase().replace('+', '').replace('-', '') }}">{{ entry.grade }}</span>
+                  </div>
+                </div>
+                }
+              </div>
+            </div>
+            }
+
             <!-- Metrics Cards -->
             <div class="metrics-grid">
               <div class="metric-card calories">
@@ -206,7 +236,11 @@
             <!-- Log Meal Action -->
             <div class="results-actions">
               <button type="button" class="btn btn-secondary btn-log-meal" (click)="openLogModal()">
-                📋 Log this meal
+                @if (mealBreakdown()?.is_multi && mealBreakdown()?.entries && mealBreakdown()!.entries!.length > 1) {
+                  📋 Log all {{ mealBreakdown()!.entries!.length }} meals
+                } @else {
+                  📋 Log this meal
+                }
               </button>
             </div>
           </div>
@@ -272,6 +306,35 @@
               </span>
             </div>
 
+            @if (!activityBreakdown()?.is_multi && activityBreakdown()?.entries?.length === 1) {
+            <div class="detected-time-banner">
+              🕒 <span>Auto-selected time: <strong>{{ activityBreakdown()!.entries![0].time_label }}</strong></span>
+            </div>
+            }
+
+            @if (activityBreakdown()?.is_multi && activityBreakdown()?.entries && activityBreakdown()!.entries!.length > 1) {
+            <div class="multi-entries-section">
+              <div class="multi-entries-header">
+                <h4>🏃 Detected Separate Activities ({{ activityBreakdown()!.entries!.length }})</h4>
+                <span class="multi-entries-sub">Each session will be logged at its own time</span>
+              </div>
+              <div class="multi-entries-list">
+                @for (entry of activityBreakdown()!.entries!; track $index) {
+                <div class="multi-entry-card">
+                  <div class="multi-entry-main">
+                    <span class="multi-entry-title">{{ entry.clean_title || entry.description }}</span>
+                    <span class="multi-entry-time">🕒 {{ entry.time_label }}</span>
+                  </div>
+                  <div class="multi-entry-stats">
+                    <span class="multi-entry-cal">-{{ entry.calories_burned }} kcal</span>
+                    <span class="multi-entry-macros">{{ entry.duration_minutes }} mins • {{ entry.intensity }}</span>
+                  </div>
+                </div>
+                }
+              </div>
+            </div>
+            }
+
             <div class="metrics-grid">
               <div class="metric-card calories">
                 <span class="metric-val">{{ activityBreakdown()?.calories_burned }} kcal</span>
@@ -323,7 +386,11 @@
 
             <div class="results-actions">
               <button type="button" class="btn btn-secondary btn-log-meal" (click)="openActivityLogModal()">
-                📋 Log this activity
+                @if (activityBreakdown()?.is_multi && activityBreakdown()?.entries && activityBreakdown()!.entries!.length > 1) {
+                  📋 Log all {{ activityBreakdown()!.entries!.length }} activities
+                } @else {
+                  📋 Log this activity
+                }
               </button>
             </div>
           </div>
@@ -335,7 +402,7 @@
   </main>
 
   <!-- Log Meal Modal -->
-  <app-modal [title]="'Log this meal?'" [(isOpen)]="isLogModalOpen">
+  <app-modal [title]="pendingMealEntries().length > 1 ? 'Log these meals?' : 'Log this meal?'" [(isOpen)]="isLogModalOpen">
     <div body class="log-meal-modal-body">
       <!-- Section 1: Grid of uploaded files (read-only) -->
       @if (previewItems().length > 0) {
@@ -357,33 +424,76 @@
       </div>
       }
 
-      <!-- Section 2: Description from the text box -->
+      @if (pendingMealEntries().length <= 1 && pendingMealEntries()[0]) {
       <div class="log-section">
-        <label class="section-label">Meal Description</label>
-        <div class="log-meal-description">
-          {{ foodInput() || '(No description text)' }}
-        </div>
+        <label class="section-label" for="single-meal-desc">Meal Description</label>
+        <input id="single-meal-desc" type="text" class="form-control log-time-input"
+          [(ngModel)]="pendingMealEntries()[0].description" />
       </div>
 
-      <!-- Section 3: Date time picker with current date and time -->
       <div class="log-section">
-        <label class="section-label" for="log-time-picker">Date & Time</label>
+        <div class="time-label-row">
+          <label class="section-label" for="log-time-picker">Date & Time</label>
+          <span class="time-source-pill"
+            [class.explicit]="pendingMealEntries()[0].time_source === 'explicit'"
+            [class.averaged]="pendingMealEntries()[0].time_source === 'averaged_1w'">
+            {{ getTimeSourceBadgeText(pendingMealEntries()[0]) }}
+          </span>
+        </div>
         <input id="log-time-picker" type="datetime-local" class="form-control log-time-input"
-          [(ngModel)]="logDateTime" />
+          [(ngModel)]="pendingMealEntries()[0].time" />
       </div>
+      } @else if (pendingMealEntries().length > 1) {
+      <div class="log-section">
+        <label class="section-label">Separated Meals & Times ({{ selectedMealCount() }} selected)</label>
+        <div class="modal-multi-list">
+          @for (entry of pendingMealEntries(); track $index) {
+          <div class="modal-entry-card" [class.excluded]="entry.included === false">
+            <div class="modal-entry-top">
+              <input type="checkbox" class="modal-entry-check"
+                [checked]="entry.included !== false"
+                (change)="entry.included = $any($event.target).checked" />
+              <input type="text" class="modal-entry-desc-input" [(ngModel)]="entry.description" />
+              <span class="modal-entry-cal">{{ entry.calories }} kcal • {{ entry.grade }}</span>
+            </div>
+            <div class="modal-entry-bottom">
+              <input type="datetime-local" class="form-control log-time-input compact" [(ngModel)]="entry.time" />
+              <span class="time-source-pill"
+                [class.explicit]="entry.time_source === 'explicit'"
+                [class.averaged]="entry.time_source === 'averaged_1w'">
+                {{ getTimeSourceBadgeText(entry) }}
+              </span>
+            </div>
+          </div>
+          }
+        </div>
+      </div>
+      }
     </div>
 
     <div footer class="log-meal-modal-footer">
       <button type="button" class="btn btn-cancel" (click)="isLogModalOpen.set(false)">Cancel</button>
-      <button type="button" class="btn btn-confirm" (click)="confirmLogMeal()">Confirm</button>
+      <button type="button" class="btn btn-confirm" [disabled]="selectedMealCount() === 0" (click)="confirmLogMeal()">
+        @if (pendingMealEntries().length > 1) {
+          Confirm ({{ selectedMealCount() }})
+        } @else {
+          Confirm
+        }
+      </button>
     </div>
   </app-modal>
 
   <!-- Success Confirmation Modal -->
-  <app-modal [(isOpen)]="isSuccessModalOpen" [title]="'Meal Logged'">
+  <app-modal [(isOpen)]="isSuccessModalOpen" [title]="loggedSuccessCount() > 1 ? 'Meals Logged' : 'Meal Logged'">
     <div body class="success-modal-body">
       <div class="success-icon">🎉</div>
-      <p class="success-text">Your meal has been logged successfully to your daily food log.</p>
+      <p class="success-text">
+        @if (loggedSuccessCount() > 1) {
+          {{ loggedSuccessCount() }} separate meals have been logged to your daily food log.
+        } @else {
+          Your meal has been logged successfully to your daily food log.
+        }
+      </p>
     </div>
     <div footer class="success-modal-footer">
       <button type="button" class="btn btn-confirm" (click)="isSuccessModalOpen.set(false)">Close</button>
@@ -504,33 +614,78 @@
   </app-modal>
 
   <!-- Log Activity Modal -->
-  <app-modal [title]="'Log this activity?'" [(isOpen)]="isActivityLogModalOpen">
+  <app-modal [title]="pendingActivityEntries().length > 1 ? 'Log these activities?' : 'Log this activity?'" [(isOpen)]="isActivityLogModalOpen">
     <div body class="log-meal-modal-body">
+      @if (pendingActivityEntries().length <= 1 && pendingActivityEntries()[0]) {
       <div class="log-section">
-        <label class="section-label">Activity Description</label>
-        <div class="log-meal-description">
-          {{ activityInput() || '(No activity text)' }}
-        </div>
+        <label class="section-label" for="single-act-desc">Activity Description</label>
+        <input id="single-act-desc" type="text" class="form-control log-time-input"
+          [(ngModel)]="pendingActivityEntries()[0].clean_title" />
       </div>
 
       <div class="log-section">
-        <label class="section-label" for="act-time-picker">Date & Time</label>
+        <div class="time-label-row">
+          <label class="section-label" for="act-time-picker">Date & Time</label>
+          <span class="time-source-pill"
+            [class.explicit]="pendingActivityEntries()[0].time_source === 'explicit'"
+            [class.averaged]="pendingActivityEntries()[0].time_source === 'averaged_1w'">
+            {{ getTimeSourceBadgeText(pendingActivityEntries()[0]) }}
+          </span>
+        </div>
         <input id="act-time-picker" type="datetime-local" class="form-control log-time-input"
-          [(ngModel)]="activityLogDateTime" />
+          [(ngModel)]="pendingActivityEntries()[0].time" />
       </div>
+      } @else if (pendingActivityEntries().length > 1) {
+      <div class="log-section">
+        <label class="section-label">Separated Activities & Times ({{ selectedActivityCount() }} selected)</label>
+        <div class="modal-multi-list">
+          @for (entry of pendingActivityEntries(); track $index) {
+          <div class="modal-entry-card" [class.excluded]="entry.included === false">
+            <div class="modal-entry-top">
+              <input type="checkbox" class="modal-entry-check"
+                [checked]="entry.included !== false"
+                (change)="entry.included = $any($event.target).checked" />
+              <input type="text" class="modal-entry-desc-input" [(ngModel)]="entry.clean_title" />
+              <span class="modal-entry-cal">-{{ entry.calories_burned }} kcal</span>
+            </div>
+            <div class="modal-entry-bottom">
+              <input type="datetime-local" class="form-control log-time-input compact" [(ngModel)]="entry.time" />
+              <span class="time-source-pill"
+                [class.explicit]="entry.time_source === 'explicit'"
+                [class.averaged]="entry.time_source === 'averaged_1w'">
+                {{ getTimeSourceBadgeText(entry) }}
+              </span>
+            </div>
+          </div>
+          }
+        </div>
+      </div>
+      }
     </div>
 
     <div footer class="log-meal-modal-footer">
       <button type="button" class="btn btn-cancel" (click)="isActivityLogModalOpen.set(false)">Cancel</button>
-      <button type="button" class="btn btn-confirm" (click)="confirmLogActivity()">Confirm Log</button>
+      <button type="button" class="btn btn-confirm" [disabled]="selectedActivityCount() === 0" (click)="confirmLogActivity()">
+        @if (pendingActivityEntries().length > 1) {
+          Confirm ({{ selectedActivityCount() }})
+        } @else {
+          Confirm Log
+        }
+      </button>
     </div>
   </app-modal>
 
   <!-- Activity Success Modal -->
-  <app-modal [(isOpen)]="isActivitySuccessModalOpen" [title]="'Activity Logged'">
+  <app-modal [(isOpen)]="isActivitySuccessModalOpen" [title]="activityLoggedSuccessCount() > 1 ? 'Activities Logged' : 'Activity Logged'">
     <div body class="success-modal-body">
       <div class="success-icon">🏃</div>
-      <p class="success-text">Your physical activity has been logged successfully to your daily logs.</p>
+      <p class="success-text">
+        @if (activityLoggedSuccessCount() > 1) {
+          {{ activityLoggedSuccessCount() }} separate physical activities have been logged to your daily logs.
+        } @else {
+          Your physical activity has been logged successfully to your daily logs.
+        }
+      </p>
     </div>
     <div footer class="success-modal-footer">
       <button type="button" class="btn btn-confirm" (click)="isActivitySuccessModalOpen.set(false)">Close</button>

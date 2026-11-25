@@ -4,6 +4,7 @@ import os
 import io
 import tempfile
 import time
+from datetime import datetime, timedelta
 import re
 import urllib.request
 import urllib.parse
@@ -1577,6 +1578,375 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
 class AnalyzeFoodRequest(BaseModel):
     food_name: str
+    userid: Optional[str] = None
+    client_now: Optional[str] = None
+    recent_log_times: Optional[List[str]] = None
+
+PERIOD_BUCKETS = {
+    "morning": {
+        "hours": set(range(5, 12)),
+        "default_meal": (8, 30),
+        "default_activity": (7, 30),
+    },
+    "noon": {
+        "hours": {11, 12, 13, 14},
+        "default_meal": (13, 0),
+        "default_activity": (12, 30),
+    },
+    "afternoon": {
+        "hours": {12, 13, 14, 15, 16},
+        "default_meal": (15, 0),
+        "default_activity": (15, 30),
+    },
+    "evening": {
+        "hours": {17, 18, 19, 20},
+        "default_meal": (18, 30),
+        "default_activity": (18, 0),
+    },
+    "night": {
+        "hours": {19, 20, 21, 22, 23},
+        "default_meal": (20, 30),
+        "default_activity": (20, 0),
+    },
+    "late_night": {
+        "hours": {21, 22, 23, 0, 1, 2, 3, 4},
+        "default_meal": (22, 30),
+        "default_activity": (22, 0),
+    },
+}
+
+VAGUE_PERIOD_SYNONYMS = [
+    ("early morning", "morning"),
+    ("this morning", "morning"),
+    ("in the morning", "morning"),
+    ("for breakfast", "morning"),
+    ("breakfast", "morning"),
+    ("morning", "morning"),
+    ("midday", "noon"),
+    ("for lunch", "noon"),
+    ("lunchtime", "noon"),
+    ("lunch", "noon"),
+    ("noon", "noon"),
+    ("this afternoon", "afternoon"),
+    ("in the afternoon", "afternoon"),
+    ("afternoon", "afternoon"),
+    ("this evening", "evening"),
+    ("in the evening", "evening"),
+    ("for snacks", "evening"),
+    ("for snack", "evening"),
+    ("evening", "evening"),
+    ("late night", "late_night"),
+    ("midnight", "late_night"),
+    ("for dinner", "night"),
+    ("at night", "night"),
+    ("tonight", "night"),
+    ("dinner", "night"),
+    ("night", "night"),
+]
+
+def parse_client_now(client_now: Optional[str]) -> datetime:
+    if client_now:
+        try:
+            cleaned = client_now.strip().replace("Z", "")
+            return datetime.fromisoformat(cleaned[:16] if len(cleaned) >= 16 else cleaned).replace(second=0, microsecond=0)
+        except Exception:
+            pass
+    return datetime.now().replace(second=0, microsecond=0)
+
+def format_12h_from_hm(hour: int, minute: int) -> str:
+    period = "AM" if hour < 12 else "PM"
+    h_12 = 12 if hour % 12 == 0 else hour % 12
+    return f"{h_12:02d}:{minute:02d} {period}"
+
+def compute_1w_period_averages(
+    userid: Optional[str],
+    log_type: str,
+    now_dt: datetime,
+    client_recent_times: Optional[List[str]] = None,
+) -> Dict[str, dict]:
+    """Compute average hour/minute per time-of-day period from the user's previous 7 days of logs."""
+    raw_times: List[str] = []
+    if userid:
+        source_logs = MEAL_LOGS.get(userid, []) if log_type == "meal" else ACTIVITY_LOGS.get(userid, [])
+        for item in source_logs:
+            t = item.get("time")
+            if isinstance(t, str) and t.strip():
+                raw_times.append(t.strip())
+    if client_recent_times:
+        for t in client_recent_times:
+            if isinstance(t, str) and t.strip():
+                raw_times.append(t.strip())
+
+    # Deduplicate by minute-precision ISO string so backend + IndexedDB logs don't double count
+    seen_iso = set()
+    window_start = now_dt - timedelta(days=7)
+    window_end = now_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+    recent_dts: List[datetime] = []
+
+    for raw in raw_times:
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "")[:16])
+            key = dt.strftime("%Y-%m-%dT%H:%M")
+            if key in seen_iso:
+                continue
+            seen_iso.add(key)
+            if window_start <= dt <= window_end:
+                recent_dts.append(dt)
+        except Exception:
+            continue
+
+    default_key = "default_meal" if log_type == "meal" else "default_activity"
+    averages: Dict[str, dict] = {}
+
+    for period_name, cfg in PERIOD_BUCKETS.items():
+        allowed_hours = cfg["hours"]
+        matching_mins = []
+        for dt in recent_dts:
+            if dt.hour in allowed_hours:
+                total_min = dt.hour * 60 + dt.minute
+                if period_name == "late_night" and dt.hour < 5:
+                    total_min += 24 * 60
+                matching_mins.append(total_min)
+
+        if matching_mins:
+            avg_min = int(round(sum(matching_mins) / len(matching_mins)))
+            avg_h = (avg_min // 60) % 24
+            avg_m = avg_min % 60
+            averages[period_name] = {
+                "hour": avg_h,
+                "minute": avg_m,
+                "sample_count": len(matching_mins),
+            }
+        else:
+            def_h, def_m = cfg[default_key]
+            averages[period_name] = {
+                "hour": def_h,
+                "minute": def_m,
+                "sample_count": 0,
+            }
+
+    return averages
+
+def resolve_entry_datetime(
+    now_dt: datetime,
+    period_averages: Dict[str, dict],
+    explicit_time: Optional[str] = None,
+    vague_period: Optional[str] = None,
+    date_offset_days: int = 0,
+    explicit_date: Optional[str] = None,
+) -> dict:
+    """Resolve explicit clock time, vague period (averaged over 1 week), or current time into YYYY-MM-DDTHH:MM."""
+    target_date = (now_dt + timedelta(days=int(date_offset_days or 0))).date()
+    if explicit_date:
+        try:
+            target_date = datetime.fromisoformat(explicit_date[:10]).date()
+        except Exception:
+            pass
+
+    if explicit_time:
+        m = re.match(r'^(\d{1,2}):(\d{2})$', str(explicit_time).strip())
+        if m:
+            h, mn = int(m.group(1)), int(m.group(2))
+            if 0 <= h < 24 and 0 <= mn < 60:
+                iso = f"{target_date.isoformat()}T{h:02d}:{mn:02d}"
+                return {
+                    "time": iso,
+                    "time_source": "explicit",
+                    "period": vague_period,
+                    "sample_count": 0,
+                    "time_label": format_12h_from_hm(h, mn),
+                }
+
+    norm_period = (vague_period or "").strip().lower().replace(" ", "_")
+    if norm_period in period_averages:
+        avg_info = period_averages[norm_period]
+        h, mn = avg_info["hour"], avg_info["minute"]
+        samples = avg_info["sample_count"]
+        iso = f"{target_date.isoformat()}T{h:02d}:{mn:02d}"
+        period_display = norm_period.replace("_", " ")
+        if samples > 0:
+            label = f"{format_12h_from_hm(h, mn)} (7-day {period_display} avg from {samples} log{'s' if samples != 1 else ''})"
+        else:
+            label = f"{format_12h_from_hm(h, mn)} (default {period_display} time)"
+        return {
+            "time": iso,
+            "time_source": "averaged_1w",
+            "period": norm_period,
+            "sample_count": samples,
+            "time_label": label,
+        }
+
+    iso = f"{target_date.isoformat()}T{now_dt.hour:02d}:{now_dt.minute:02d}"
+    return {
+        "time": iso,
+        "time_source": "current",
+        "period": None,
+        "sample_count": 0,
+        "time_label": f"{format_12h_from_hm(now_dt.hour, now_dt.minute)} (current time)",
+    }
+
+def _detect_clause_time_and_date(clause: str, now_dt: datetime) -> dict:
+    """Detect explicit clock times, vague periods, date offsets, and clean text for a single clause."""
+    lower = clause.lower()
+    date_offset = 0
+    has_explicit_date = False
+
+    if "yesterday" in lower:
+        date_offset = -1
+        has_explicit_date = True
+    elif "tomorrow" in lower:
+        date_offset = 1
+        has_explicit_date = True
+    elif "today" in lower or "tonight" in lower:
+        date_offset = 0
+        has_explicit_date = True
+    else:
+        days = {
+            "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+            "friday": 4, "saturday": 5, "sunday": 6,
+        }
+        for day_name, day_num in days.items():
+            if re.search(r'\b' + day_name + r'\b', lower):
+                days_ago = (now_dt.weekday() - day_num) % 7
+                if days_ago == 0:
+                    days_ago = 7
+                date_offset = -days_ago
+                has_explicit_date = True
+                break
+
+    explicit_time = None
+    first_anchor_pos: Optional[int] = None
+
+    # Pattern 1: HH:MM am/pm or 24h HH:MM (with optional 'at')
+    m = re.search(r'\b(?:at\s+)?(\d{1,2}):(\d{2})\s*(am|pm)?\b', lower)
+    if m:
+        h, mn, ampm = int(m.group(1)), int(m.group(2)), m.group(3)
+        if ampm == "pm" and h < 12:
+            h += 12
+        elif ampm == "am" and h == 12:
+            h = 0
+        if 0 <= h < 24 and 0 <= mn < 60:
+            explicit_time = f"{h:02d}:{mn:02d}"
+            first_anchor_pos = m.start()
+
+    # Pattern 2: HH am/pm (e.g. 8am, 2 pm, 9pm)
+    if not explicit_time:
+        m = re.search(r'\b(?:at\s+)?(\d{1,2})\s*(am|pm)\b', lower)
+        if m:
+            h, ampm = int(m.group(1)), m.group(2)
+            if ampm == "pm" and h < 12:
+                h += 12
+            elif ampm == "am" and h == 12:
+                h = 0
+            if 0 <= h < 24:
+                explicit_time = f"{h:02d}:00"
+                first_anchor_pos = m.start()
+
+    # Pattern 3: at HH (e.g. at 9, at 14) - avoid matching durations like "at 5 km"
+    if not explicit_time:
+        m = re.search(r'\bat\s+(\d{1,2})\b(?!\s*(?:km|m|min|mins|minute|minutes|hr|hrs|hour|hours|kg|g|ml|cal|kcal))', lower)
+        if m:
+            h = int(m.group(1))
+            if 0 <= h < 24:
+                explicit_time = f"{h:02d}:00"
+                first_anchor_pos = m.start()
+
+    vague_period = None
+    for phrase, p_name in VAGUE_PERIOD_SYNONYMS:
+        pm = re.search(r'\b' + re.escape(phrase) + r'\b', lower)
+        if pm:
+            vague_period = p_name
+            if first_anchor_pos is None:
+                first_anchor_pos = pm.start()
+            break
+
+    # Scrub time/date phrases for a clean item description
+    cleaned = clause
+    cleaned = re.sub(r'\b(?:at\s+)?\d{1,2}:\d{2}\s*(?:am|pm)?\b', ' ', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\b(?:at\s+)?\d{1,2}\s*(?:am|pm)\b', ' ', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\bat\s+\d{1,2}\b(?!\s*(?:km|m|min|mins|minute|minutes|hr|hrs|hour|hours|kg|g|ml|cal|kcal))', ' ', cleaned, flags=re.IGNORECASE)
+    for phrase, _ in VAGUE_PERIOD_SYNONYMS:
+        cleaned = re.sub(r'\b' + re.escape(phrase) + r'\b', ' ', cleaned, flags=re.IGNORECASE)
+    for date_word in ["yesterday", "today", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "last", "i had", "i ate", "i have had", "i did", "ate", "had", "eating", "did"]:
+        cleaned = re.sub(r'\b' + re.escape(date_word) + r'\b', ' ', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'^[\s,;:\-]+|[\s,;:\-]+$', '', re.sub(r'\s+', ' ', cleaned))
+
+    has_time = bool(explicit_time or vague_period)
+    time_at_start = False
+    if has_time and first_anchor_pos is not None:
+        prefix = clause[:first_anchor_pos].strip()
+        prefix_clean = re.sub(r'\b(?:i\s+had|i\s+ate|i\s+have\s+had|i\s+did|had|ate|did|yesterday|today)\b', '', prefix, flags=re.IGNORECASE).strip()
+        time_at_start = len(prefix_clean) == 0
+
+    return {
+        "raw": clause.strip(),
+        "clean_text": cleaned or clause.strip(),
+        "explicit_time": explicit_time,
+        "vague_period": vague_period,
+        "date_offset_days": date_offset,
+        "has_explicit_date": has_explicit_date,
+        "has_time": has_time,
+        "time_at_start": time_at_start,
+    }
+
+def split_multi_time_clauses(text: str, now_dt: datetime) -> List[dict]:
+    """
+    Split natural language input into distinct time-anchored clauses when >= 2 time/period markers exist.
+    Keeps items sharing the same occasion together (e.g. 'idly and sambhar at 8am, pulav at 2pm' -> 2 entries).
+    """
+    stripped = text.strip()
+    if not stripped:
+        return []
+
+    raw_parts = [p.strip() for p in re.split(r'\s*(?:,|;|\band\b|\bthen\b)\s*', stripped, flags=re.IGNORECASE) if p.strip()]
+    if len(raw_parts) <= 1:
+        info = _detect_clause_time_and_date(stripped, now_dt)
+        return [info]
+
+    parsed_parts = [_detect_clause_time_and_date(p, now_dt) for p in raw_parts]
+    time_bearing_count = sum(1 for p in parsed_parts if p["has_time"])
+
+    # If only 0 or 1 clause specifies a time/period, keep as a single combined meal/activity
+    if time_bearing_count <= 1:
+        info = _detect_clause_time_and_date(stripped, now_dt)
+        return [info]
+
+    # Merge timeless parts with their corresponding time-bearing clause
+    merged: List[str] = []
+    pending_prefix: List[str] = []
+    last_was_leading_time = False
+
+    for part in parsed_parts:
+        if part["has_time"]:
+            if pending_prefix:
+                merged.append(" and ".join(pending_prefix + [part["raw"]]))
+                pending_prefix = []
+            else:
+                merged.append(part["raw"])
+            last_was_leading_time = part["time_at_start"]
+        else:
+            if last_was_leading_time and merged:
+                merged[-1] = f"{merged[-1]} and {part['raw']}"
+            else:
+                pending_prefix.append(part["raw"])
+
+    if pending_prefix:
+        if merged:
+            merged[-1] = f"{merged[-1]} and " + " and ".join(pending_prefix)
+        else:
+            merged.append(" and ".join(pending_prefix))
+
+    final_clauses = [_detect_clause_time_and_date(m_text, now_dt) for m_text in merged]
+
+    # Inherit explicit date (e.g. "yesterday I had ragi malt at 8am, pulav at 2pm") across clauses that omit date
+    inherited_offset = 0
+    for c in final_clauses:
+        if c["has_explicit_date"]:
+            inherited_offset = c["date_offset_days"]
+        elif inherited_offset != 0:
+            c["date_offset_days"] = inherited_offset
+
+    return final_clauses
 
 def fetch_usda_nutrients(query: str) -> Optional[dict]:
     api_key = os.environ.get("USDA_API_KEY", "DEMO_KEY")
@@ -1725,25 +2095,43 @@ FOOD_BASELINES = [
     (["paneer"], (265, 18.0, 6.0, 20.0))
 ]
 
-def analyze_food_with_llm(query: str) -> Optional[dict]:
+def analyze_food_with_llm(query: str, now_dt: Optional[datetime] = None) -> Optional[dict]:
+    ref_now = (now_dt or datetime.now()).strftime("%Y-%m-%dT%H:%M")
     prompt = f"""
 You are an expert nutritional analyst AI.
+Current local time is: {ref_now}
 Analyze the following natural language meal description:
 "{query}"
 
-Calculate precise total nutritional content based on standard USDA dietary reference values for the exact items, quantities, and portion sizes specified in the query.
+Instructions:
+1. If the user mentions MULTIPLE meals or foods eaten at DIFFERENT times or meal periods (e.g., "i had ragi malt at 8am, pulav at 2pm and biriyani at 9pm", or "idli in the morning and rice at night"), split them into SEPARATE entries in the "entries" array—one per distinct meal/time.
+2. If multiple food items are part of the SAME meal/occasion (e.g., "idly and sambhar at 8am", or "chicken breast, brown rice and salad for lunch"), keep them together in ONE entry.
+3. For each entry:
+   - "description": clean food description (without time/date filler words like "at 8am", "in the morning", "yesterday", "i had").
+   - "date_offset_days": integer offset from today (0 = today, -1 = yesterday, 1 = tomorrow, or negative days for past weekdays relative to current local time).
+   - "explicit_time": "HH:MM" in 24-hour format ONLY if a specific clock time was stated (e.g. "8am" -> "08:00", "2pm" -> "14:00", "9pm" -> "21:00"), otherwise null.
+   - "vague_period": one of ["morning", "noon", "afternoon", "evening", "night", "late_night"] ONLY if a vague time-of-day/meal-period word was stated without a clock time (e.g. "morning", "breakfast" -> "morning"; "lunch", "noon" -> "noon"; "afternoon" -> "afternoon"; "evening", "snacks" -> "evening"; "dinner", "night", "tonight" -> "night"), otherwise null.
+   - Calculate precise nutritional content based on standard USDA dietary reference values for the exact items and portions in that entry.
 
 Return ONLY a valid JSON object matching this exact JSON schema:
 {{
-  "calories": <integer total kcal>,
-  "protein": <integer total protein in grams>,
-  "carbs": <integer total carbohydrates in grams>,
-  "fat": <integer total fat in grams>,
-  "items": [
+  "entries": [
     {{
-      "name": "<food item name>",
-      "quantity": "<portion size description>",
-      "calories": <integer kcal for this item>
+      "description": "<clean food description>",
+      "date_offset_days": 0,
+      "explicit_time": "08:00",
+      "vague_period": null,
+      "calories": <integer kcal>,
+      "protein": <integer protein in grams>,
+      "carbs": <integer carbs in grams>,
+      "fat": <integer fat in grams>,
+      "items": [
+        {{
+          "name": "<food item name>",
+          "quantity": "<portion size description>",
+          "calories": <integer kcal for this item>
+        }}
+      ]
     }}
   ]
 }}
@@ -1753,87 +2141,80 @@ Do NOT include markdown formatting or extra commentary outside the raw JSON obje
     if not raw_response:
         return None
     try:
-        cleaned = raw_response.strip()
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        if cleaned.startswith("```"):
-            cleaned = cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        data = json.loads(cleaned.strip())
-        
-        cal = int(data.get("calories", 0))
-        prot = int(data.get("protein", 0))
-        carbs = int(data.get("carbs", 0))
-        fat = int(data.get("fat", 0))
-        items = data.get("items", [])
-        
-        item_breakdowns = []
-        for item in items:
-            name = item.get("name", "Food item")
-            qty = item.get("quantity", "")
-            item_cal = item.get("calories", 0)
-            prefix = f"{qty} " if qty else ""
-            item_breakdowns.append(f"{prefix}{name} ({item_cal} kcal)")
-            
-        return {
-            "calories": cal,
-            "protein": prot,
-            "carbs": carbs,
-            "fat": fat,
-            "item_breakdowns": item_breakdowns
-        }
+        cleaned = clean_json_response(raw_response)
+        data = json.loads(cleaned)
+
+        raw_entries = data.get("entries")
+        if not isinstance(raw_entries, list) or len(raw_entries) == 0:
+            # Backward-compatible single-entry shape if model returns flat object
+            if "calories" in data:
+                raw_entries = [{
+                    "description": query,
+                    "date_offset_days": 0,
+                    "explicit_time": data.get("explicit_time"),
+                    "vague_period": data.get("vague_period"),
+                    "calories": data.get("calories", 0),
+                    "protein": data.get("protein", 0),
+                    "carbs": data.get("carbs", 0),
+                    "fat": data.get("fat", 0),
+                    "items": data.get("items", []),
+                }]
+            else:
+                return None
+
+        parsed_entries = []
+        for entry in raw_entries:
+            cal = int(entry.get("calories", 0))
+            prot = int(entry.get("protein", 0))
+            carbs = int(entry.get("carbs", 0))
+            fat = int(entry.get("fat", 0))
+            items = entry.get("items", []) or []
+            item_breakdowns = []
+            for item in items:
+                name = item.get("name", "Food item")
+                qty = item.get("quantity", "")
+                item_cal = item.get("calories", 0)
+                prefix = f"{qty} " if qty else ""
+                item_breakdowns.append(f"{prefix}{name} ({item_cal} kcal)")
+
+            parsed_entries.append({
+                "description": str(entry.get("description") or query).strip(),
+                "date_offset_days": int(entry.get("date_offset_days") or 0),
+                "explicit_time": entry.get("explicit_time"),
+                "vague_period": entry.get("vague_period"),
+                "calories": cal,
+                "protein": prot,
+                "carbs": carbs,
+                "fat": fat,
+                "item_breakdowns": item_breakdowns,
+            })
+
+        return {"entries": parsed_entries}
     except Exception as e:
         print(f"Error parsing LLM meal response: {e}. Raw: {raw_response}")
         return None
 
-@app.post("/api/users/analyze-food")
-def analyze_food(payload: AnalyzeFoodRequest):
-    query = payload.food_name.strip()
-    if not query:
-        raise HTTPException(status_code=400, detail="Food name query cannot be empty.")
-        
-    # 1. Try LLM Parsing first if available
-    llm_result = analyze_food_with_llm(query)
-    if llm_result and llm_result.get("calories", 0) > 0:
-        total_calories = llm_result["calories"]
-        total_protein = llm_result["protein"]
-        total_carbs = llm_result["carbs"]
-        total_fat = llm_result["fat"]
-        item_breakdowns = llm_result["item_breakdowns"]
-        
-        unified_desc = " + ".join(item_breakdowns)
-        grade, tips = calculate_grade_and_tips(total_calories, total_protein, total_carbs, total_fat, unified_desc)
-        breakdown_msg = "Breakdown: " + unified_desc
-        tips.insert(0, breakdown_msg)
-        return {
-            "calories": total_calories,
-            "protein": total_protein,
-            "carbs": total_carbs,
-            "fat": total_fat,
-            "grade": grade,
-            "tips": tips
-        }
-        
-    # 2. Precise Rule-based NLP + USDA baseline lookup fallback
+def _analyze_single_food_fallback(food_query: str) -> dict:
     NUMBER_MAP = {
         "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
         "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
         "a": 1, "an": 1
     }
-    
-    raw_items = split_food_items(query)
-    
+
+    raw_items = split_food_items(food_query)
+    if not raw_items:
+        raw_items = [food_query]
+
     total_calories = 0
     total_protein = 0.0
     total_carbs = 0.0
     total_fat = 0.0
     item_breakdowns = []
-    
+
     for raw_item in raw_items:
         query_lower = raw_item.lower()
         multiplier = 1.0
-        
+
         digit_match = re.search(r'\b(\d+(?:\.\d+)?)\b', query_lower)
         if digit_match:
             try:
@@ -1845,31 +2226,31 @@ def analyze_food(payload: AnalyzeFoodRequest):
                 if re.search(r'\b' + word + r'\b', query_lower):
                     multiplier = float(val)
                     break
-                    
+
         core_food = query_lower
         fillers = [
             "i ate", "i had", "i have had", "this morning", "in the morning", "in the afternoon",
             "in the evening", "at night", "for breakfast", "for lunch", "for dinner", "for snack",
-            "yesterday", "tonight", "today", "ate", "had", "eating", "pieces of", "piece of", 
-            "slice of", "slices of", "bowl of", "bowls of", "plate of", "plates of", 
+            "yesterday", "tonight", "today", "ate", "had", "eating", "pieces of", "piece of",
+            "slice of", "slices of", "bowl of", "bowls of", "plate of", "plates of",
             "cups of", "cup of", "glass of", "glasses of", "some", "few"
         ]
         for filler in fillers:
             core_food = core_food.replace(filler, " ")
-            
+
         core_food = re.sub(r'\b\d+(?:\.\d+)?\b', ' ', core_food)
         for word in NUMBER_MAP.keys():
             core_food = re.sub(r'\b' + word + r'\b', ' ', core_food)
-            
+
         core_food = re.sub(r'\s+', ' ', core_food).strip()
         if core_food.endswith("s") and not core_food.endswith("ss") and not core_food.endswith("ce") and not core_food.endswith("us"):
             core_food = core_food[:-1]
-            
+
         if not core_food:
             core_food = raw_item.strip()
-            
+
         usda_data = fetch_usda_nutrients(core_food)
-        
+
         if usda_data:
             item_calories = int(usda_data["calories"] * multiplier)
             item_protein = round(usda_data["protein"] * multiplier, 1)
@@ -1884,38 +2265,166 @@ def analyze_food(payload: AnalyzeFoodRequest):
                     base_cal, base_prot, base_carb, base_fat = c, p, carb, f
                     matched_name = keys[0]
                     break
-                    
+
             item_calories = int(base_cal * multiplier)
             item_protein = round(base_prot * multiplier, 1)
             item_carbs = round(base_carb * multiplier, 1)
             item_fat = round(base_fat * multiplier, 1)
             item_desc = matched_name
-            
+
         total_calories += item_calories
         total_protein += item_protein
         total_carbs += item_carbs
         total_fat += item_fat
-        
+
         qty_label = f"{multiplier}x " if multiplier != 1.0 else ""
         item_breakdowns.append(f"{qty_label}{item_desc.split(',')[0].strip()} ({item_calories} kcal)")
 
     unified_desc = " + ".join(item_breakdowns)
     grade, tips = calculate_grade_and_tips(total_calories, int(total_protein), int(total_carbs), int(total_fat), unified_desc)
-    
-    breakdown_msg = "Breakdown: " + " + ".join(item_breakdowns)
+    breakdown_msg = "Breakdown: " + unified_desc
     tips.insert(0, breakdown_msg)
-    
     if len(raw_items) > 1:
         tips.insert(1, f"Aggregated and analyzed {len(raw_items)} distinct food items dynamically.")
-        
+
     return {
         "calories": total_calories,
         "protein": round(total_protein, 1),
         "carbs": round(total_carbs, 1),
         "fat": round(total_fat, 1),
         "grade": grade,
-        "tips": tips
+        "tips": tips,
+        "item_breakdowns": item_breakdowns,
     }
+
+def _build_analyzed_food_response(raw_entries: List[dict], now_dt: datetime, period_averages: Dict[str, dict]) -> dict:
+    resolved_entries = []
+    total_calories = 0
+    total_protein = 0.0
+    total_carbs = 0.0
+    total_fat = 0.0
+    summary_parts = []
+
+    for entry in raw_entries:
+        cal = int(entry.get("calories", 0))
+        prot = round(float(entry.get("protein", 0)), 1)
+        carbs = round(float(entry.get("carbs", 0)), 1)
+        fat = round(float(entry.get("fat", 0)), 1)
+        desc = str(entry.get("description") or "").strip()
+
+        # Safety net: if LLM omitted explicit_time/vague_period, run deterministic detector on desc
+        explicit_time = entry.get("explicit_time")
+        vague_period = entry.get("vague_period")
+        date_offset = int(entry.get("date_offset_days") or 0)
+        if not explicit_time and not vague_period and desc:
+            det = _detect_clause_time_and_date(desc, now_dt)
+            if det["has_time"]:
+                explicit_time = det["explicit_time"]
+                vague_period = det["vague_period"]
+                desc = det["clean_text"]
+            if date_offset == 0 and det["has_explicit_date"]:
+                date_offset = det["date_offset_days"]
+
+        time_info = resolve_entry_datetime(
+            now_dt=now_dt,
+            period_averages=period_averages,
+            explicit_time=explicit_time,
+            vague_period=vague_period,
+            date_offset_days=date_offset,
+        )
+
+        item_breakdowns = entry.get("item_breakdowns") or [f"{desc} ({cal} kcal)"]
+        unified_desc = " + ".join(item_breakdowns)
+        entry_grade, entry_tips = calculate_grade_and_tips(cal, int(prot), int(carbs), int(fat), unified_desc)
+        if not entry.get("tips"):
+            entry_tips.insert(0, "Breakdown: " + unified_desc)
+        else:
+            entry_tips = list(entry["tips"])
+
+        resolved_entries.append({
+            "description": desc,
+            "calories": cal,
+            "protein": prot,
+            "carbs": carbs,
+            "fat": fat,
+            "grade": entry_grade,
+            "tips": entry_tips,
+            "time": time_info["time"],
+            "time_source": time_info["time_source"],
+            "time_label": time_info["time_label"],
+            "period": time_info["period"],
+            "sample_count": time_info["sample_count"],
+        })
+
+        total_calories += cal
+        total_protein += prot
+        total_carbs += carbs
+        total_fat += fat
+        summary_parts.append(f"{desc} @ {time_info['time_label']} ({cal} kcal)")
+
+    overall_grade, overall_tips = calculate_grade_and_tips(
+        total_calories, int(total_protein), int(total_carbs), int(total_fat), " + ".join(summary_parts)
+    )
+    if len(resolved_entries) > 1:
+        overall_tips.insert(0, f"Detected {len(resolved_entries)} separate meals: " + " | ".join(summary_parts))
+    elif resolved_entries:
+        overall_tips = resolved_entries[0]["tips"]
+        overall_grade = resolved_entries[0]["grade"]
+
+    return {
+        "calories": total_calories,
+        "protein": round(total_protein, 1),
+        "carbs": round(total_carbs, 1),
+        "fat": round(total_fat, 1),
+        "grade": overall_grade,
+        "tips": overall_tips,
+        "is_multi": len(resolved_entries) > 1,
+        "entries": resolved_entries,
+    }
+
+@app.post("/api/users/analyze-food")
+def analyze_food(payload: AnalyzeFoodRequest):
+    query = payload.food_name.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Food name query cannot be empty.")
+
+    now_dt = parse_client_now(payload.client_now)
+    period_averages = compute_1w_period_averages(
+        userid=payload.userid,
+        log_type="meal",
+        now_dt=now_dt,
+        client_recent_times=payload.recent_log_times,
+    )
+
+    # 1. Try LLM Multi-Entry Parsing first if available
+    llm_result = analyze_food_with_llm(query, now_dt=now_dt)
+    if llm_result and llm_result.get("entries"):
+        valid_entries = [e for e in llm_result["entries"] if e.get("calories", 0) > 0]
+        if valid_entries:
+            return _build_analyzed_food_response(valid_entries, now_dt, period_averages)
+
+    # 2. Deterministic multi-clause splitter + USDA/baseline fallback
+    clauses = split_multi_time_clauses(query, now_dt)
+    if not clauses:
+        clauses = [_detect_clause_time_and_date(query, now_dt)]
+
+    fallback_entries = []
+    for clause in clauses:
+        food_res = _analyze_single_food_fallback(clause["clean_text"])
+        fallback_entries.append({
+            "description": clause["clean_text"],
+            "date_offset_days": clause["date_offset_days"],
+            "explicit_time": clause["explicit_time"],
+            "vague_period": clause["vague_period"],
+            "calories": food_res["calories"],
+            "protein": food_res["protein"],
+            "carbs": food_res["carbs"],
+            "fat": food_res["fat"],
+            "tips": food_res["tips"],
+            "item_breakdowns": food_res["item_breakdowns"],
+        })
+
+    return _build_analyzed_food_response(fallback_entries, now_dt, period_averages)
 
 
 # ==========================================
@@ -2185,8 +2694,8 @@ def add_meal_log(userid: str, payload: MealLogRequest):
         # Use the cleaned food query as description for the log entry
         description = food_query
 
-    # Generate timestamp as ID (milliseconds since epoch to guarantee uniqueness)
-    timestamp_id = str(int(time.time() * 1000))
+    # Generate timestamp + short uuid suffix as ID to guarantee uniqueness for parallel batch logs
+    timestamp_id = f"{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
     
     log_entry = {
         "id": timestamp_id,
@@ -3572,6 +4081,9 @@ load_activity_logs()
 
 class AnalyzeActivityRequest(BaseModel):
     activity_text: str
+    userid: Optional[str] = None
+    client_now: Optional[str] = None
+    recent_log_times: Optional[List[str]] = None
 
 class ActivityTaskItem(BaseModel):
     task: str
@@ -3593,86 +4105,9 @@ class ActivityLogRequest(BaseModel):
     report: Optional[ActivityLogReport] = None
 
 
-def analyze_activity_description(activity_text: str) -> dict:
-    # 1. Attempt LLM analysis first (using Ollama or Gemini via call_llm_api)
-    prompt = f"""You are an expert exercise physiologist, health data analyst, and physical fitness specialist.
-Analyze the following user-described physical activity and estimate the metabolic energy burn, active duration, intensity, and a task-wise breakdown of activities performed.
-The activity can be ANYTHING: occupational heavy labor, lifting bins, carrying equipment, household chores, sports, walking, or structured gym workouts.
-
-User Activity Description: "{activity_text}"
-
-Instructions:
-1. Identify all distinct sub-tasks or sub-activities mentioned or implied in the text.
-   - "task": A concise descriptive title of the sub-activity (e.g. "Lifting 60kg Bins", "Warehouse Standing & Moving", "Moving Heavy Furniture", "Bench Press").
-   - "details": Specific set/rep count, weight, duration, or context extracted (e.g. "Repeated 60kg lifts throughout day", "3 sets of 10 reps", "45 minutes continuous").
-   - "calories_burned": Estimated integer calories burned for that specific sub-activity based on standard exercise science METs and physical effort.
-2. Determine overall active duration in minutes ("duration_minutes"). If not explicitly mentioned, estimate realistically based on activity context (e.g., full day work = 360 mins active).
-3. Compute total calories burned ("calories_burned", equal to the sum of task calories).
-4. Create a descriptive summary title ("clean_title").
-5. Assign an activity category ("activity_type", e.g. "Heavy Labor / Occupational", "Gym / Strength Training", "Cardio / Running", "Sports", "Yardwork / Household", "General Fitness").
-6. Rate intensity level ("intensity": "Low", "Moderate", "High", or "Very High").
-7. Provide 2-3 personalized health/recovery tips or notes ("tips").
-
-Return ONLY a valid JSON object matching this exact schema, with no markdown codeblocks:
-{{
-  "clean_title": "Occupational Heavy Lifting & Walking",
-  "calories_burned": 450,
-  "duration_minutes": 360,
-  "intensity": "High",
-  "activity_type": "Heavy Labor / Occupational",
-  "tasks": [
-    {{
-      "task": "Lifting 60kg Bins",
-      "details": "Lifting and moving 60kg bins throughout shift",
-      "calories_burned": 280
-    }},
-    {{
-      "task": "Warehouse Walking",
-      "details": "Active walking and standing during shift",
-      "calories_burned": 170
-    }}
-  ],
-  "tips": [
-    "Heavy occupational lifting causes substantial spinal and hamstring fatigue; practice hip-hinge mechanics.",
-    "Replenish with adequate protein and electrolytes post-shift to aid muscular recovery."
-  ]
-}}
-"""
-    raw_llm_res = call_llm_api(prompt, response_json=True)
-    if raw_llm_res:
-        try:
-            cleaned_text = raw_llm_res.strip()
-            if cleaned_text.startswith("```"):
-                lines = cleaned_text.split("\n")
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                cleaned_text = "\n".join(lines).strip()
-            data = json.loads(cleaned_text)
-            if "calories_burned" in data and "tasks" in data and isinstance(data["tasks"], list) and len(data["tasks"]) > 0:
-                return {
-                    "clean_title": str(data.get("clean_title") or activity_text.capitalize()),
-                    "calories_burned": max(20, int(data.get("calories_burned", 100))),
-                    "duration_minutes": max(5, int(data.get("duration_minutes", 30))),
-                    "intensity": str(data.get("intensity", "Moderate")),
-                    "activity_type": str(data.get("activity_type", "General Physical Activity")),
-                    "tasks": [
-                        {
-                            "task": str(t.get("task", "Activity Sub-task")),
-                            "details": str(t.get("details", "")),
-                            "calories_burned": max(10, int(t.get("calories_burned", 30)))
-                        }
-                        for t in data["tasks"]
-                    ],
-                    "tips": [str(tip) for tip in data.get("tips", ["Stay hydrated and maintain balanced nutrition."])]
-                }
-        except Exception as e:
-            print(f"LLM activity parsing failed, using fallback heuristic: {e}")
-
-    # Fallback Heuristic Analysis
+def _analyze_single_activity_heuristic(activity_text: str) -> dict:
     text_lower = activity_text.lower()
-    
+
     duration = 30
     dur_match = re.search(r'(\d+)\s*(?:min|mins|minute|minutes|hr|hrs|hour|hours)', text_lower)
     if dur_match:
@@ -3682,7 +4117,7 @@ Return ONLY a valid JSON object matching this exact schema, with no markdown cod
         else:
             duration = val
     elif 'day' in text_lower or 'shift' in text_lower:
-        duration = 360  # Default full active day
+        duration = 360
     else:
         digit_match = re.search(r'\b(\d+)\b', text_lower)
         if digit_match:
@@ -3691,8 +4126,7 @@ Return ONLY a valid JSON object matching this exact schema, with no markdown cod
                 duration = duration * 30
 
     extracted_tasks: List[dict] = []
-    
-    # Check for heavy labor / occupational lifting / manual work
+
     if any(k in text_lower for k in ["bin", "bins", "heavy", "lift", "lifting", "carry", "carrying", "move", "furniture", "load", "loading", "labor", "work"]):
         weight_match = re.search(r'(\d+)\s*(?:kg|lbs|pounds)', text_lower)
         wt_detail = f"Lifting {weight_match.group(0)}" if weight_match else "Heavy manual lifting & moving"
@@ -3719,10 +4153,20 @@ Return ONLY a valid JSON object matching this exact schema, with no markdown cod
         intensity = "Moderate"
         clean_title = f"Walking Activity ({duration} mins)"
         extracted_tasks.append({"task": "Walking Movement", "details": f"{duration} mins", "calories_burned": int(4.0 * 70 * (duration / 60.0))})
+    elif any(k in text_lower for k in ["gym", "weight", "lift", "squat", "bench", "workout", "strength", "pushup", "pullup"]):
+        activity_type = "Gym / Strength Training"
+        intensity = "High"
+        clean_title = f"Strength Training ({duration} mins)"
+        extracted_tasks.append({"task": "Strength & Resistance Workout", "details": f"{duration} mins", "calories_burned": int(6.0 * 70 * (duration / 60.0))})
+    elif any(k in text_lower for k in ["cycle", "cycling", "bike", "swim", "yoga", "stretch", "badminton", "cricket", "football"]):
+        activity_type = "Cardio / Sports"
+        intensity = "Moderate"
+        clean_title = f"{activity_text.strip().capitalize()} ({duration} mins)"
+        extracted_tasks.append({"task": activity_text.strip().capitalize(), "details": f"{duration} mins", "calories_burned": int(6.5 * 70 * (duration / 60.0))})
     else:
         activity_type = "General Physical Activity"
         intensity = "Moderate"
-        clean_title = f"Physical Activity ({duration} mins)"
+        clean_title = f"{activity_text.strip().capitalize()} ({duration} mins)"
         extracted_tasks.append({"task": "Active Physical Movement", "details": f"{duration} mins", "calories_burned": int(5.0 * 70 * (duration / 60.0))})
 
     total_calories = sum(t["calories_burned"] for t in extracted_tasks)
@@ -3734,19 +4178,243 @@ Return ONLY a valid JSON object matching this exact schema, with no markdown cod
     return {
         "clean_title": clean_title,
         "calories_burned": max(20, total_calories),
-        "duration_minutes": duration,
+        "duration_minutes": max(5, duration),
         "intensity": intensity,
         "activity_type": activity_type,
         "tasks": extracted_tasks,
         "tips": tips
     }
 
+def _build_analyzed_activity_response(raw_entries: List[dict], now_dt: datetime, period_averages: Dict[str, dict]) -> dict:
+    resolved_entries = []
+    all_tasks: List[dict] = []
+    total_burned = 0
+    total_duration = 0
+    intensity_rank = {"Low": 1, "Moderate": 2, "High": 3, "Very High": 4}
+    highest_intensity = "Moderate"
+    highest_rank = 0
+    summary_parts = []
+
+    for entry in raw_entries:
+        raw_desc = str(entry.get("description") or entry.get("clean_title") or "Physical Activity").strip()
+        explicit_time = entry.get("explicit_time")
+        vague_period = entry.get("vague_period")
+        date_offset = int(entry.get("date_offset_days") or 0)
+        if not explicit_time and not vague_period and raw_desc:
+            det = _detect_clause_time_and_date(raw_desc, now_dt)
+            if det["has_time"]:
+                explicit_time = det["explicit_time"]
+                vague_period = det["vague_period"]
+                if not entry.get("clean_title"):
+                    raw_desc = det["clean_text"]
+            if date_offset == 0 and det["has_explicit_date"]:
+                date_offset = det["date_offset_days"]
+
+        time_info = resolve_entry_datetime(
+            now_dt=now_dt,
+            period_averages=period_averages,
+            explicit_time=explicit_time,
+            vague_period=vague_period,
+            date_offset_days=date_offset,
+        )
+
+        clean_title = str(entry.get("clean_title") or raw_desc.capitalize()).strip()
+        cals = max(20, int(entry.get("calories_burned", 100)))
+        dur = max(5, int(entry.get("duration_minutes", 30)))
+        intensity = str(entry.get("intensity", "Moderate"))
+        act_type = str(entry.get("activity_type", "General Physical Activity"))
+        tasks = [
+            {
+                "task": str(t.get("task", "Activity Sub-task")),
+                "details": str(t.get("details", "")),
+                "calories_burned": max(10, int(t.get("calories_burned", 30))),
+            }
+            for t in (entry.get("tasks") or [])
+        ]
+        tips = [str(tip) for tip in (entry.get("tips") or ["Stay hydrated and maintain balanced nutrition."])]
+
+        resolved_entries.append({
+            "description": raw_desc,
+            "clean_title": clean_title,
+            "calories_burned": cals,
+            "duration_minutes": dur,
+            "intensity": intensity,
+            "activity_type": act_type,
+            "tasks": tasks,
+            "tips": tips,
+            "time": time_info["time"],
+            "time_source": time_info["time_source"],
+            "time_label": time_info["time_label"],
+            "period": time_info["period"],
+            "sample_count": time_info["sample_count"],
+        })
+
+        total_burned += cals
+        total_duration += dur
+        all_tasks.extend(tasks)
+        r = intensity_rank.get(intensity, 2)
+        if r > highest_rank:
+            highest_rank = r
+            highest_intensity = intensity
+        summary_parts.append(f"{clean_title} @ {time_info['time_label']} ({cals} kcal)")
+
+    if len(resolved_entries) == 1:
+        single = resolved_entries[0]
+        return {
+            "clean_title": single["clean_title"],
+            "calories_burned": single["calories_burned"],
+            "duration_minutes": single["duration_minutes"],
+            "intensity": single["intensity"],
+            "activity_type": single["activity_type"],
+            "tasks": single["tasks"],
+            "tips": single["tips"],
+            "is_multi": False,
+            "entries": resolved_entries,
+        }
+
+    combined_tips = [
+        f"Detected {len(resolved_entries)} separate activity sessions: " + " | ".join(summary_parts),
+        "Replenish fluids and maintain adequate hydration across all sessions.",
+        "Ensure sufficient post-activity protein intake for muscle repair and recovery.",
+    ]
+    return {
+        "clean_title": " & ".join(e["clean_title"] for e in resolved_entries[:3]),
+        "calories_burned": total_burned,
+        "duration_minutes": total_duration,
+        "intensity": highest_intensity,
+        "activity_type": "Multi-Session Activity" if len({e["activity_type"] for e in resolved_entries}) > 1 else resolved_entries[0]["activity_type"],
+        "tasks": all_tasks,
+        "tips": combined_tips,
+        "is_multi": True,
+        "entries": resolved_entries,
+    }
+
+def analyze_activity_description(
+    activity_text: str,
+    userid: Optional[str] = None,
+    client_now: Optional[str] = None,
+    recent_log_times: Optional[List[str]] = None,
+) -> dict:
+    now_dt = parse_client_now(client_now)
+    period_averages = compute_1w_period_averages(
+        userid=userid,
+        log_type="activity",
+        now_dt=now_dt,
+        client_recent_times=recent_log_times,
+    )
+
+    # 1. Attempt LLM multi-entry analysis first
+    prompt = f"""You are an expert exercise physiologist, health data analyst, and physical fitness specialist.
+Current local time is: {now_dt.strftime("%Y-%m-%dT%H:%M")}
+Analyze the following user-described physical activity and estimate the metabolic energy burn, active duration, intensity, and task-wise breakdown.
+The activity can be ANYTHING: occupational heavy labor, lifting bins, carrying equipment, household chores, sports, walking, or structured gym workouts.
+
+User Activity Description: "{activity_text}"
+
+Instructions:
+1. If the user describes MULTIPLE activities done at DIFFERENT times or periods of the day (e.g., "30 min morning run and 45 min evening gym", or "walked at 7am, swam at 6pm"), split them into SEPARATE items inside "entries" — one per distinct session/time.
+2. If multiple sub-tasks belong to the SAME session/time (e.g., "45 min gym with bench press and squats at 6pm"), keep them in ONE entry with multiple items in its "tasks" array.
+3. For each entry:
+   - "description": clean activity text for that session (without time/date filler words).
+   - "clean_title": concise descriptive title of that session.
+   - "date_offset_days": integer offset from today (0 = today, -1 = yesterday, etc.).
+   - "explicit_time": "HH:MM" in 24-hour format ONLY if a specific clock time was stated (e.g. "7am" -> "07:00", "6pm" -> "18:00"), else null.
+   - "vague_period": one of ["morning", "noon", "afternoon", "evening", "night", "late_night"] ONLY if a vague period word was stated without a clock time (e.g. "morning" -> "morning", "evening" -> "evening", "night" -> "night"), else null.
+   - "duration_minutes": active duration in minutes.
+   - "calories_burned": total calories burned for that entry (sum of its tasks).
+   - "activity_type": e.g. "Heavy Labor / Occupational", "Gym / Strength Training", "Cardio / Running", "Sports", "Yardwork / Household", "General Fitness".
+   - "intensity": "Low", "Moderate", "High", or "Very High".
+   - "tasks": list of sub-tasks {{"task", "details", "calories_burned"}}.
+   - "tips": 2-3 personalized recovery/guidance tips.
+
+Return ONLY a valid JSON object matching this exact schema, with no markdown codeblocks:
+{{
+  "entries": [
+    {{
+      "description": "30 min run",
+      "clean_title": "Morning Running Session",
+      "date_offset_days": 0,
+      "explicit_time": null,
+      "vague_period": "morning",
+      "calories_burned": 300,
+      "duration_minutes": 30,
+      "intensity": "High",
+      "activity_type": "Cardio / Running",
+      "tasks": [
+        {{
+          "task": "Outdoor Running",
+          "details": "30 minutes continuous run",
+          "calories_burned": 300
+        }}
+      ],
+      "tips": [
+        "Hydrate well after your run."
+      ]
+    }}
+  ]
+}}
+"""
+    raw_llm_res = call_llm_api(prompt, response_json=True)
+    if raw_llm_res:
+        try:
+            cleaned_text = clean_json_response(raw_llm_res)
+            data = json.loads(cleaned_text)
+            raw_entries = data.get("entries")
+            if not isinstance(raw_entries, list) or len(raw_entries) == 0:
+                if "calories_burned" in data and "tasks" in data and isinstance(data["tasks"], list) and len(data["tasks"]) > 0:
+                    raw_entries = [{
+                        "description": activity_text,
+                        "clean_title": data.get("clean_title") or activity_text.capitalize(),
+                        "date_offset_days": 0,
+                        "explicit_time": data.get("explicit_time"),
+                        "vague_period": data.get("vague_period"),
+                        "calories_burned": data.get("calories_burned", 100),
+                        "duration_minutes": data.get("duration_minutes", 30),
+                        "intensity": data.get("intensity", "Moderate"),
+                        "activity_type": data.get("activity_type", "General Physical Activity"),
+                        "tasks": data.get("tasks", []),
+                        "tips": data.get("tips", []),
+                    }]
+            if isinstance(raw_entries, list) and len(raw_entries) > 0:
+                return _build_analyzed_activity_response(raw_entries, now_dt, period_averages)
+        except Exception as e:
+            print(f"LLM activity parsing failed, using fallback heuristic: {e}")
+
+    # 2. Deterministic multi-clause splitter + heuristic fallback
+    clauses = split_multi_time_clauses(activity_text, now_dt)
+    if not clauses:
+        clauses = [_detect_clause_time_and_date(activity_text, now_dt)]
+
+    fallback_entries = []
+    for clause in clauses:
+        heuristic_res = _analyze_single_activity_heuristic(clause["clean_text"])
+        fallback_entries.append({
+            "description": clause["clean_text"],
+            "clean_title": heuristic_res["clean_title"],
+            "date_offset_days": clause["date_offset_days"],
+            "explicit_time": clause["explicit_time"],
+            "vague_period": clause["vague_period"],
+            "calories_burned": heuristic_res["calories_burned"],
+            "duration_minutes": heuristic_res["duration_minutes"],
+            "intensity": heuristic_res["intensity"],
+            "activity_type": heuristic_res["activity_type"],
+            "tasks": heuristic_res["tasks"],
+            "tips": heuristic_res["tips"],
+        })
+
+    return _build_analyzed_activity_response(fallback_entries, now_dt, period_averages)
+
 @app.post("/api/users/analyze-activity")
 def analyze_activity(payload: AnalyzeActivityRequest):
     text = payload.activity_text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Activity text cannot be empty.")
-    return analyze_activity_description(text)
+    return analyze_activity_description(
+        text,
+        userid=payload.userid,
+        client_now=payload.client_now,
+        recent_log_times=payload.recent_log_times,
+    )
 
 @app.post("/api/users/{userid}/activity-logs")
 def add_activity_log(userid: str, payload: ActivityLogRequest):
@@ -3759,13 +4427,13 @@ def add_activity_log(userid: str, payload: ActivityLogRequest):
         
     report = payload.report
     if not report:
-        parsed = analyze_activity_description(payload.description)
+        parsed = analyze_activity_description(payload.description, userid=userid)
         report = ActivityLogReport(**parsed)
         
     report_dict = report.dict() if hasattr(report, "dict") else report
     clean_desc = report_dict.get("clean_title") or payload.description
 
-    timestamp_id = "act-" + str(int(time.time() * 1000))
+    timestamp_id = f"act-{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}"
     log_entry = {
         "id": timestamp_id,
         "description": clean_desc,

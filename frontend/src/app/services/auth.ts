@@ -175,8 +175,16 @@ export class AuthService {
     return this.http.post<any>(`${this.apiUrl}/users/analyze-image`, formData);
   }
 
-  analyzeFood(foodName: string): Observable<any> {
-    return this.http.post<any>(`${this.apiUrl}/users/analyze-food`, { food_name: foodName });
+  analyzeFood(
+    foodName: string,
+    context?: { userid?: string | null; client_now?: string; recent_log_times?: string[] }
+  ): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/users/analyze-food`, {
+      food_name: foodName,
+      ...(context?.userid ? { userid: context.userid } : {}),
+      ...(context?.client_now ? { client_now: context.client_now } : {}),
+      ...(context?.recent_log_times?.length ? { recent_log_times: context.recent_log_times } : {}),
+    });
   }
 
   addMealLog(userid: string, payload: any): Observable<any> {
@@ -245,8 +253,16 @@ export class AuthService {
   }
 
   // Physical Activity & Analytics Graph Endpoints
-  analyzeActivity(activityText: string): Observable<any> {
-    return this.http.post<any>(`${this.apiUrl}/users/analyze-activity`, { activity_text: activityText });
+  analyzeActivity(
+    activityText: string,
+    context?: { userid?: string | null; client_now?: string; recent_log_times?: string[] }
+  ): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/users/analyze-activity`, {
+      activity_text: activityText,
+      ...(context?.userid ? { userid: context.userid } : {}),
+      ...(context?.client_now ? { client_now: context.client_now } : {}),
+      ...(context?.recent_log_times?.length ? { recent_log_times: context.recent_log_times } : {}),
+    });
   }
 
   addActivityLog(userid: string, payload: any): Observable<any> {

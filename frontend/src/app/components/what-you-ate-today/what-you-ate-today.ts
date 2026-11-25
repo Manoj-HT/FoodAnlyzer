@@ -10,6 +10,8 @@ import {
 } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { AuthService, User } from '../../services/auth';
 import { IndexedDbService } from '../../services/indexed-db';
 import { DeviceCapabilityService } from '../../services/device-capability';
@@ -19,6 +21,24 @@ import { AccordionStateService } from '../../services/accordion-state';
 import { LogsStateService } from '../../services/logs-state';
 import { SectionHeaderComponent } from '../section-header/section-header';
 
+export type TimeSource = 'explicit' | 'averaged_1w' | 'current';
+
+export interface AnalyzedMealEntry {
+  description: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  grade: string;
+  tips: string[];
+  time: string;
+  time_source: TimeSource;
+  time_label: string;
+  period?: string | null;
+  sample_count?: number;
+  included?: boolean;
+}
+
 export interface MealBreakdown {
   calories: number;
   protein: number;
@@ -26,12 +46,31 @@ export interface MealBreakdown {
   fat: number;
   grade: string;
   tips: string[];
+  is_multi?: boolean;
+  entries?: AnalyzedMealEntry[];
 }
 
 export interface ActivityTask {
   task: string;
   details?: string;
   calories_burned: number;
+}
+
+export interface AnalyzedActivityEntry {
+  description: string;
+  clean_title: string;
+  calories_burned: number;
+  duration_minutes: number;
+  intensity: string;
+  activity_type: string;
+  tasks?: ActivityTask[];
+  tips: string[];
+  time: string;
+  time_source: TimeSource;
+  time_label: string;
+  period?: string | null;
+  sample_count?: number;
+  included?: boolean;
 }
 
 export interface ActivityBreakdown {
@@ -42,6 +81,8 @@ export interface ActivityBreakdown {
   activity_type: string;
   tasks?: ActivityTask[];
   tips: string[];
+  is_multi?: boolean;
+  entries?: AnalyzedActivityEntry[];
 }
 
 @Component({
@@ -87,12 +128,17 @@ export class WhatYouAteTodayComponent implements OnInit {
   foodInput = signal('');
   isLogModalOpen = signal(false);
   isSuccessModalOpen = signal(false);
+  loggedSuccessCount = signal(1);
   isAudioTranscribing = signal(false);
   logDateTime = signal('');
   preselectedTime = signal('');
   isAnalyzing = signal(false);
   showResult = signal(false);
   mealBreakdown = signal<MealBreakdown | null>(null);
+  pendingMealEntries = signal<AnalyzedMealEntry[]>([]);
+  selectedMealCount = computed(() =>
+    this.pendingMealEntries().filter((e) => e.included !== false && e.description.trim().length > 0).length
+  );
 
   // Image Classification States
   isImageAnalyzing = signal(false);
@@ -123,7 +169,14 @@ export class WhatYouAteTodayComponent implements OnInit {
   activityBreakdown = signal<ActivityBreakdown | null>(null);
   isActivityLogModalOpen = signal(false);
   isActivitySuccessModalOpen = signal(false);
+  activityLoggedSuccessCount = signal(1);
   activityLogDateTime = signal('');
+  pendingActivityEntries = signal<AnalyzedActivityEntry[]>([]);
+  selectedActivityCount = computed(() =>
+    this.pendingActivityEntries().filter(
+      (e) => e.included !== false && (e.clean_title || e.description).trim().length > 0
+    ).length
+  );
   activitySuggestions = signal<string[]>([
     '30 min morning jog in the park',
     '45 mins weight training at gym',
@@ -221,14 +274,34 @@ export class WhatYouAteTodayComponent implements OnInit {
     }
   }
 
-  runFinalFoodAnalysis(): void {
+  async runFinalFoodAnalysis(): Promise<void> {
     if (!this.foodInput().trim()) return;
 
     this.isAnalyzing.set(true);
     this.showResult.set(false);
 
-    this.authService.analyzeFood(this.foodInput()).subscribe({
+    const context = await this.getAnalysisContext('meal');
+
+    this.authService.analyzeFood(this.foodInput(), context).subscribe({
       next: (res) => {
+        const entries: AnalyzedMealEntry[] =
+          Array.isArray(res.entries) && res.entries.length > 0
+            ? res.entries
+            : [
+                {
+                  description: this.foodInput().trim(),
+                  calories: res.calories,
+                  protein: res.protein,
+                  carbs: res.carbs,
+                  fat: res.fat,
+                  grade: res.grade,
+                  tips: res.tips,
+                  time: this.preselectedTime() || this.formatLocalDateTime(new Date()),
+                  time_source: this.preselectedTime() ? 'explicit' : 'current',
+                  time_label: 'Current time',
+                },
+              ];
+
         const breakdown: MealBreakdown = {
           calories: res.calories,
           protein: res.protein,
@@ -236,6 +309,8 @@ export class WhatYouAteTodayComponent implements OnInit {
           fat: res.fat,
           grade: res.grade,
           tips: res.tips,
+          is_multi: Boolean(res.is_multi && entries.length > 1),
+          entries,
         };
         this.mealBreakdown.set(breakdown);
         this.isAnalyzing.set(false);
@@ -641,19 +716,114 @@ export class WhatYouAteTodayComponent implements OnInit {
     this.router.navigate(['/login']);
   }
 
-  openLogModal(): void {
-    if (this.preselectedTime()) {
-      this.logDateTime.set(this.preselectedTime());
-    } else {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
+  private formatLocalDateTime(dt: Date): string {
+    const year = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    const hours = String(dt.getHours()).padStart(2, '0');
+    const minutes = String(dt.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
 
-      this.logDateTime.set(`${year}-${month}-${day}T${hours}:${minutes}`);
+  private formatLocalDate(dt: Date): string {
+    const year = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private async getAnalysisContext(kind: 'meal' | 'activity'): Promise<{
+    userid?: string;
+    client_now: string;
+    recent_log_times: string[];
+  }> {
+    const now = new Date();
+    const clientNow = this.formatLocalDateTime(now);
+    const userid = this.authService.getUserId();
+    const recentTimes: string[] = [];
+
+    if (userid) {
+      try {
+        const cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const cutoffStr = this.formatLocalDate(cutoff);
+        const logs =
+          kind === 'meal'
+            ? await this.indexedDb.getMealLogs(userid)
+            : await this.indexedDb.getActivityLogs(userid);
+
+        for (const item of logs) {
+          if (item.date && item.time && item.date >= cutoffStr) {
+            recentTimes.push(`${item.date}T${item.time}`);
+          }
+        }
+      } catch (e) {
+        console.warn('Could not read IndexedDB recent logs for time averaging:', e);
+      }
     }
+
+    return {
+      ...(userid ? { userid } : {}),
+      client_now: clientNow,
+      recent_log_times: recentTimes,
+    };
+  }
+
+  getTimeSourceBadgeText(entry: {
+    time_source?: TimeSource;
+    sample_count?: number;
+    period?: string | null;
+  }): string {
+    const periodLabel = entry.period ? entry.period.replace('_', ' ') : '';
+    if (entry.time_source === 'explicit') {
+      return 'Detected time';
+    }
+    if (entry.time_source === 'averaged_1w') {
+      if (entry.sample_count && entry.sample_count > 0) {
+        return `7-day ${periodLabel} avg (${entry.sample_count} log${entry.sample_count === 1 ? '' : 's'})`;
+      }
+      return periodLabel ? `Default ${periodLabel} time` : 'Default period time';
+    }
+    return 'Current time';
+  }
+
+  openLogModal(): void {
+    const breakdown = this.mealBreakdown();
+    const fallbackTime = this.preselectedTime() || this.formatLocalDateTime(new Date());
+
+    if (breakdown?.entries && breakdown.entries.length > 0) {
+      const cloned: AnalyzedMealEntry[] = breakdown.entries.map((entry, idx) => ({
+        ...entry,
+        time:
+          idx === 0 && breakdown.entries!.length === 1 && this.preselectedTime()
+            ? this.preselectedTime()
+            : entry.time || fallbackTime,
+        time_source:
+          idx === 0 && breakdown.entries!.length === 1 && this.preselectedTime()
+            ? 'explicit'
+            : entry.time_source || 'current',
+        included: true,
+      }));
+      this.pendingMealEntries.set(cloned);
+      this.logDateTime.set(cloned[0].time);
+    } else if (breakdown) {
+      this.pendingMealEntries.set([
+        {
+          description: this.foodInput().trim(),
+          calories: breakdown.calories,
+          protein: breakdown.protein,
+          carbs: breakdown.carbs,
+          fat: breakdown.fat,
+          grade: breakdown.grade,
+          tips: breakdown.tips,
+          time: fallbackTime,
+          time_source: this.preselectedTime() ? 'explicit' : 'current',
+          time_label: 'Current time',
+          included: true,
+        },
+      ]);
+      this.logDateTime.set(fallbackTime);
+    }
+
     this.isLogModalOpen.set(true);
   }
 
@@ -664,68 +834,91 @@ export class WhatYouAteTodayComponent implements OnInit {
       return;
     }
 
-    const breakdown = this.mealBreakdown()!;
-    const payload = {
-      description: this.foodInput(),
-      time: this.logDateTime(),
-      report: {
-        calories: breakdown.calories,
-        protein: breakdown.protein,
-        carbs: breakdown.carbs,
-        fat: breakdown.fat,
-        grade: breakdown.grade,
-      },
+    const selectedEntries = this.pendingMealEntries().filter(
+      (e) => e.included !== false && e.description.trim().length > 0
+    );
+    if (selectedEntries.length === 0) {
+      return;
+    }
+
+    // Close log modal immediately before making the calls
+    this.isLogModalOpen.set(false);
+    this.loggedSuccessCount.set(selectedEntries.length);
+
+    const apiRequests = selectedEntries.map((entry) => {
+      const entryTime = entry.time || this.formatLocalDateTime(new Date());
+      const logDt = new Date(entryTime);
+      const validDt = isNaN(logDt.getTime()) ? new Date() : logDt;
+      const dateStr = this.formatLocalDate(validDt);
+      const timeStr = `${String(validDt.getHours()).padStart(2, '0')}:${String(validDt.getMinutes()).padStart(2, '0')}`;
+
+      this.indexedDb
+        .addMealLog({
+          userId: userid,
+          date: dateStr,
+          time: timeStr,
+          time_period:
+            validDt.getHours() < 11
+              ? 'Breakfast'
+              : validDt.getHours() < 16
+                ? 'Lunch'
+                : validDt.getHours() < 20
+                  ? 'Dinner'
+                  : 'Snacks',
+          description: entry.description.trim(),
+          food_item: entry.description.trim(),
+          calories: entry.calories,
+          protein: entry.protein,
+          carbs: entry.carbs,
+          fat: entry.fat,
+          grade: entry.grade,
+          tips: entry.tips ? entry.tips.join('; ') : '',
+        })
+        .catch((err) => console.error('IndexedDB save error:', err));
+
+      const payload = {
+        description: entry.description.trim(),
+        time: entryTime,
+        report: {
+          calories: entry.calories,
+          protein: entry.protein,
+          carbs: entry.carbs,
+          fat: entry.fat,
+          grade: entry.grade,
+        },
+      };
+
+      return this.authService.addMealLog(userid, payload).pipe(
+        catchError((err) => {
+          console.error('Failed to log meal to server:', err);
+          return of(null);
+        })
+      );
+    });
+
+    const resetMealForm = () => {
+      this.previewItems().forEach((item) => URL.revokeObjectURL(item.blobUrl));
+      this.previewItems.set([]);
+      this.foodInput.set('');
+      this.preselectedTime.set('');
+      this.showResult.set(false);
+      this.mealBreakdown.set(null);
+      this.pendingMealEntries.set([]);
+      this.selectedImageName.set('');
+      this.showConfirmationDialog.set(false);
+      this.detectedFood.set('');
     };
 
-    // Close log modal immediately before making the call
-    this.isLogModalOpen.set(false);
-
-    // Save to local IndexedDB store (Zero-Cloud DB, 6-Month Data Lifecycle)
-    const logDt = new Date(this.logDateTime() || Date.now());
-    const dateStr = logDt.toISOString().split('T')[0];
-    const timeStr = `${String(logDt.getHours()).padStart(2, '0')}:${String(logDt.getMinutes()).padStart(2, '0')}`;
-    
-    this.indexedDb.addMealLog({
-      userId: userid,
-      date: dateStr,
-      time: timeStr,
-      time_period: logDt.getHours() < 11 ? 'Breakfast' : logDt.getHours() < 16 ? 'Lunch' : logDt.getHours() < 20 ? 'Dinner' : 'Snacks',
-      description: this.foodInput(),
-      food_item: this.foodInput(),
-      calories: breakdown.calories,
-      protein: breakdown.protein,
-      carbs: breakdown.carbs,
-      fat: breakdown.fat,
-      grade: breakdown.grade,
-      tips: breakdown.tips ? breakdown.tips.join('; ') : ''
-    }).catch(err => console.error('IndexedDB save error:', err));
-
-    this.authService.addMealLog(userid, payload).subscribe({
+    forkJoin(apiRequests).subscribe({
       next: () => {
         this.logsState.invalidateCache();
-        // Show success modal
         this.isSuccessModalOpen.set(true);
-
-        // Reset everything
-        this.previewItems().forEach((item) => URL.revokeObjectURL(item.blobUrl));
-        this.previewItems.set([]);
-        this.foodInput.set('');
-        this.preselectedTime.set('');
-        this.showResult.set(false);
-        this.mealBreakdown.set(null);
-        this.selectedImageName.set('');
-        this.showConfirmationDialog.set(false);
-        this.detectedFood.set('');
+        resetMealForm();
       },
-      error: (err) => {
-        console.error('Failed to log meal to server:', err);
+      error: () => {
         // Even if server request fails, offline log succeeded locally!
         this.isSuccessModalOpen.set(true);
-        this.previewItems().forEach((item) => URL.revokeObjectURL(item.blobUrl));
-        this.previewItems.set([]);
-        this.foodInput.set('');
-        this.showResult.set(false);
-        this.mealBreakdown.set(null);
+        resetMealForm();
       },
     });
   }
@@ -734,16 +927,41 @@ export class WhatYouAteTodayComponent implements OnInit {
     this.activityInput.set(suggestion);
   }
 
-  onAnalyzeActivity(): void {
+  async onAnalyzeActivity(): Promise<void> {
     const text = this.activityInput().trim();
     if (!text) return;
 
     this.isActivityAnalyzing.set(true);
     this.showActivityResult.set(false);
 
-    this.authService.analyzeActivity(text).subscribe({
+    const context = await this.getAnalysisContext('activity');
+
+    this.authService.analyzeActivity(text, context).subscribe({
       next: (res) => {
-        this.activityBreakdown.set(res);
+        const entries: AnalyzedActivityEntry[] =
+          Array.isArray(res.entries) && res.entries.length > 0
+            ? res.entries
+            : [
+                {
+                  description: text,
+                  clean_title: res.clean_title || text,
+                  calories_burned: res.calories_burned,
+                  duration_minutes: res.duration_minutes,
+                  intensity: res.intensity,
+                  activity_type: res.activity_type,
+                  tasks: res.tasks || [],
+                  tips: res.tips || [],
+                  time: this.formatLocalDateTime(new Date()),
+                  time_source: 'current',
+                  time_label: 'Current time',
+                },
+              ];
+
+        this.activityBreakdown.set({
+          ...res,
+          is_multi: Boolean(res.is_multi && entries.length > 1),
+          entries,
+        });
         this.isActivityAnalyzing.set(false);
         this.showActivityResult.set(true);
       },
@@ -751,19 +969,44 @@ export class WhatYouAteTodayComponent implements OnInit {
         this.isActivityAnalyzing.set(false);
         console.error('Activity analysis failed:', err);
         alert('Failed to analyze activity. Please try again.');
-      }
+      },
     });
   }
 
   openActivityLogModal(): void {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const breakdown = this.activityBreakdown();
+    const fallbackTime = this.formatLocalDateTime(new Date());
 
-    this.activityLogDateTime.set(`${year}-${month}-${day}T${hours}:${minutes}`);
+    if (breakdown?.entries && breakdown.entries.length > 0) {
+      const cloned: AnalyzedActivityEntry[] = breakdown.entries.map((entry) => ({
+        ...entry,
+        clean_title: entry.clean_title || entry.description,
+        time: entry.time || fallbackTime,
+        time_source: entry.time_source || 'current',
+        included: true,
+      }));
+      this.pendingActivityEntries.set(cloned);
+      this.activityLogDateTime.set(cloned[0].time);
+    } else if (breakdown) {
+      this.pendingActivityEntries.set([
+        {
+          description: this.activityInput().trim(),
+          clean_title: breakdown.clean_title || this.activityInput().trim(),
+          calories_burned: breakdown.calories_burned,
+          duration_minutes: breakdown.duration_minutes,
+          intensity: breakdown.intensity,
+          activity_type: breakdown.activity_type,
+          tasks: breakdown.tasks || [],
+          tips: breakdown.tips || [],
+          time: fallbackTime,
+          time_source: 'current',
+          time_label: 'Current time',
+          included: true,
+        },
+      ]);
+      this.activityLogDateTime.set(fallbackTime);
+    }
+
     this.isActivityLogModalOpen.set(true);
   }
 
@@ -775,46 +1018,75 @@ export class WhatYouAteTodayComponent implements OnInit {
       return;
     }
 
-    const desc = breakdown.clean_title || this.activityInput();
-    const payload = {
-      description: desc,
-      time: this.activityLogDateTime(),
-      report: breakdown
-    };
+    const selectedEntries = this.pendingActivityEntries().filter(
+      (e) => e.included !== false && (e.clean_title || e.description).trim().length > 0
+    );
+    if (selectedEntries.length === 0) {
+      return;
+    }
 
     this.isActivityLogModalOpen.set(false);
+    this.activityLoggedSuccessCount.set(selectedEntries.length);
 
-    // Save to client-side IndexedDB store
-    const actDt = new Date(this.activityLogDateTime() || Date.now());
-    const actDateStr = actDt.toISOString().split('T')[0];
-    const actTimeStr = `${String(actDt.getHours()).padStart(2, '0')}:${String(actDt.getMinutes()).padStart(2, '0')}`;
+    const apiRequests = selectedEntries.map((entry) => {
+      const entryTime = entry.time || this.formatLocalDateTime(new Date());
+      const actDt = new Date(entryTime);
+      const validDt = isNaN(actDt.getTime()) ? new Date() : actDt;
+      const actDateStr = this.formatLocalDate(validDt);
+      const actTimeStr = `${String(validDt.getHours()).padStart(2, '0')}:${String(validDt.getMinutes()).padStart(2, '0')}`;
+      const desc = (entry.clean_title || entry.description).trim();
 
-    this.indexedDb.addActivityLog({
-      userId: userid,
-      date: actDateStr,
-      time: actTimeStr,
-      activity_name: desc,
-      duration_minutes: breakdown.duration_minutes || 30,
-      calories_burned: breakdown.calories_burned || 100,
-      intensity: breakdown.intensity || 'Moderate'
-    }).catch(err => console.error('IndexedDB activity save error:', err));
+      this.indexedDb
+        .addActivityLog({
+          userId: userid,
+          date: actDateStr,
+          time: actTimeStr,
+          activity_name: desc,
+          duration_minutes: entry.duration_minutes || 30,
+          calories_burned: entry.calories_burned || 100,
+          intensity: entry.intensity || 'Moderate',
+        })
+        .catch((err) => console.error('IndexedDB activity save error:', err));
 
-    this.authService.addActivityLog(userid, payload).subscribe({
+      const payload = {
+        description: desc,
+        time: entryTime,
+        report: {
+          clean_title: desc,
+          calories_burned: entry.calories_burned,
+          duration_minutes: entry.duration_minutes,
+          intensity: entry.intensity,
+          activity_type: entry.activity_type,
+          tasks: entry.tasks || [],
+          tips: entry.tips || [],
+        },
+      };
+
+      return this.authService.addActivityLog(userid, payload).pipe(
+        catchError((err) => {
+          console.error('Failed to log activity to server:', err);
+          return of(null);
+        })
+      );
+    });
+
+    const resetActivityForm = () => {
+      this.activityInput.set('');
+      this.showActivityResult.set(false);
+      this.activityBreakdown.set(null);
+      this.pendingActivityEntries.set([]);
+    };
+
+    forkJoin(apiRequests).subscribe({
       next: () => {
         this.logsState.invalidateCache();
         this.isActivitySuccessModalOpen.set(true);
-        this.activityInput.set('');
-        this.showActivityResult.set(false);
-        this.activityBreakdown.set(null);
+        resetActivityForm();
       },
-      error: (err) => {
-        console.error('Failed to log activity to server:', err);
-        // Local save succeeded
+      error: () => {
         this.isActivitySuccessModalOpen.set(true);
-        this.activityInput.set('');
-        this.showActivityResult.set(false);
-        this.activityBreakdown.set(null);
-      }
+        resetActivityForm();
+      },
     });
   }
 
